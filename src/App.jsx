@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
-import Signup from './pages/Signup'; // ✅ 1. DESCOMENTE ESTA LINHA
+import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import NewChamado from './pages/NewChamado';
 import ChamadoDetails from './pages/ChamadoDetails';
@@ -12,12 +12,13 @@ import './App.css';
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      {/* A propriedade 'basename' corrige o roteamento para o GitHub Pages */}
+      <Router basename="/TaskFlow">
         <div className="App">
           <Routes>
             {/* --- Rotas Públicas --- */}
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} /> {/* ✅ 2. DESCOMENTE ESTA LINHA */}
+            <Route path="/signup" element={<Signup />} />
 
             {/* --- Rotas Protegidas (só para usuários logados) --- */}
             <Route 
@@ -46,6 +47,7 @@ function App() {
             />
             
             {/* --- Rota Padrão --- */}
+            {/* Redireciona a rota raiz ("/") para o dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" />} />
           </Routes>
         </div>
