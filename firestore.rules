@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Regras para a coleção 'usuarios'
+    match /usuarios/{userId} {
+      // Usuário pode ler e escrever apenas seu próprio documento
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Regras para a coleção 'chamados'
+    match /chamados/{chamadoId} {
+      // Função auxiliar para obter o perfil do usuário
+      function getUserProfile() {
+        return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+      }
+
+      // Função auxiliar para verificar se é o solicitante
+      function isSolicitante() {
+        return request.auth.uid == resource.data.solicitanteId;
+      }
+
+      // Função auxiliar para verificar se é executor
+      function isExecutor() {
+        return getUserProfile().perfil == 'Executor';
+      }
+
+      // Função auxiliar para verificar se é gestor
+      function isGestor() {
+        return getUserProfile().perfil == 'Gestor';
+      }
+
+      // Função auxiliar para verificar se é o executor responsável
+      function isResponsibleExecutor() {
+        return request.auth.uid == resource.data.executorId;
+      }
+
+      // Regras de leitura
+      allow read: if request.auth != null && (
+        // Solicitante pode ler seus próprios chamados
+        isSolicitante() ||
+        // Executor pode ler chamados abertos ou que está executando
+        (isExecutor() && (resource.data.status == 'Aberto' || isResponsibleExecutor())) ||
+        // Gestor pode ler todos os chamados
+        isGestor()
+      );
+
+      // Regras de criação
+      allow create: if request.auth != null && 
+        // Apenas usuários autenticados podem criar chamados
+        request.auth.uid == request.resource.data.solicitanteId &&
+        // Status inicial deve ser 'Aberto'
+        request.resource.data.status == 'Aberto';
+
+      // Regras de atualização
+      allow update: if request.auth != null && (
+        // Executor pode assumir chamados abertos
+        (isExecutor() && 
+         resource.data.status == 'Aberto' && 
+         request.resource.data.status == 'Em Andamento' &&
+         request.resource.data.executorId == request.auth.uid) ||
+        
+        // Executor responsável pode resolver chamados em andamento
+        (isExecutor() && 
+         isResponsibleExecutor() &&
+         resource.data.status == 'Em Andamento' && 
+         request.resource.data.status == 'Resolvido') ||
+        
+        // Gestor pode aprovar ou recusar chamados resolvidos
+        (isGestor() && 
+         resource.data.status == 'Resolvido' && 
+         (request.resource.data.status == 'Aprovado' || request.resource.data.status == 'Recusado')) ||
+        
+        // Gestor pode assumir e resolver chamados diretamente
+        (isGestor() && 
+         ((resource.data.status == 'Aberto' && request.resource.data.status == 'Em Andamento') ||
+          (resource.data.status == 'Em Andamento' && request.resource.data.status == 'Resolvido')))
+      );
+
+      // Não permitir deleção de chamados
+      allow delete: if false;
+    }
+  }
+}
+
