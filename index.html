@@ -1,14 +1,32 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/x-icon" href="/TaskFlow/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TaskFlow - Sistema de Gestão de Chamados</title>
-    <script type="module" crossorigin src="/TaskFlow/assets/index-CIKGu6Sz.js"></script>
-    <link rel="stylesheet" crossorigin href="/TaskFlow/assets/index-BSlzajaJ.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/x-icon" href="/TaskFlow/favicon.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskFlow - Sistema de Gestão de Chamados</title>
+  <script type="text/javascript">
+    // Pega o caminho salvo pelo 404.html
+    var redirect = sessionStorage.getItem('redirectPath');
+
+    // Se houver um caminho salvo...
+    if (redirect) {
+      // Remove o item para não redirecionar de novo em um refresh normal
+      sessionStorage.removeItem('redirectPath');
+
+      // Usa a History API para mudar a URL na barra de endereço
+      // sem recarregar a página. O React Router vai ver a nova URL e
+      // renderizar o componente correto.
+      window.history.replaceState(null, null, redirect);
+    }
+  </script>
+  <script type="module" crossorigin src="/TaskFlow/assets/index-CIKGu6Sz.js"></script>
+  <link rel="stylesheet" crossorigin href="/TaskFlow/assets/index-BSlzajaJ.css">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
 </html>
