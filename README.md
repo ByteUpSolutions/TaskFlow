@@ -8,16 +8,11 @@ Um sistema web de gerenciamento de chamados (tarefas) desenvolvido em React, pro
 - **Backend**: Firebase (Authentication + Firestore)
 - **UI**: Tailwind CSS + shadcn/ui
 - **Deploy**: GitHub Pages
-- **Três níveis de acesso**: Solicitante, Executor e Gestor
+- **Dois níveis de acesso**: Solicitante, Executor e Gestor
 
 ## 📋 Funcionalidades
 
 ### Perfis de Usuário
-
-**Solicitante**
-- Criar novos chamados
-- Visualizar apenas os chamados que criou
-- Acompanhar o status dos seus chamados
 
 **Executor**
 - Visualizar todos os chamados com status "Aberto"
@@ -173,7 +168,7 @@ pnpm run deploy
 3. Preencha os dados e selecione seu perfil
 4. Faça login com suas credenciais
 
-### Criando um Chamado (Solicitante)
+### Criando um Chamado (Gestor)
 
 1. No dashboard, clique em "Novo Chamado"
 2. Preencha título, descrição e prioridade
