@@ -9,7 +9,8 @@ import {
   orderBy, 
   onSnapshot,
   serverTimestamp,
-  getDoc
+  getDoc,
+  arrayUnion
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -121,6 +122,34 @@ export const subscribeToChamados = (filters, callback) => {
     console.error('Error subscribing to chamados:', error);
     throw error;
   }
+};
+// NOVA FUNÇÃO: Buscar todos os usuários com um perfil específico (ex: 'Executor')
+export const getUsuariosPorPerfil = async (perfil) => {
+  try {
+    const q = query(collection(db, 'usuarios'), where('perfil', '==', perfil));
+    const querySnapshot = await getDocs(q);
+    const usuarios = [];
+    querySnapshot.forEach((doc) => {
+      usuarios.push({ id: doc.id, ...doc.data() });
+    });
+    return usuarios;
+  } catch (error) {
+    console.error('Erro ao buscar usuários por perfil:', error);
+    throw error;
+  }
+};
+
+// NOVA FUNÇÃO: Adicionar um comentário a um chamado
+export const addComentario = async (chamadoId, comentarioData) => {
+    try {
+        const chamadoRef = doc(db, 'chamados', chamadoId);
+        await updateDoc(chamadoRef, {
+            comentarios: arrayUnion(comentarioData) // Adiciona o objeto ao array de comentários
+        });
+    } catch (error) {
+        console.error('Erro ao adicionar comentário:', error);
+        throw error;
+    }
 };
 
 // Usuários

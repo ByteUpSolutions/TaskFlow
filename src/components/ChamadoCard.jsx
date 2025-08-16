@@ -2,14 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Clock, User, AlertCircle } from 'lucide-react';
+// ✅ 1. Importar o ícone de alerta
+import { Clock, User, AlertCircle, AlertTriangle } from 'lucide-react'; 
 import { useAuth } from '../contexts/AuthContext';
-import { getUsuario } from '../services/firestore'; // Importar getUsuario
+import { getUsuario } from '../services/firestore';
 
 const statusColors = {
   'Aberto': 'bg-blue-100 text-blue-800',
   'Em Andamento': 'bg-yellow-100 text-yellow-800',
-  'Resolvido': 'bg-green-100 text-green-800',
+  'Pausado': 'bg-gray-100 text-gray-800', // ✅ Adicionada cor para o status Pausado
+  'Resolvido': 'bg-purple-100 text-purple-800', // Alterado para Roxo para diferenciar de Aprovado
   'Aprovado': 'bg-green-100 text-green-800',
   'Recusado': 'bg-red-100 text-red-800'
 };
@@ -21,7 +23,7 @@ const prioridadeColors = {
 };
 
 export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser } = useAuth(); // Adicionado currentUser
   const [executorName, setExecutorName] = useState(null);
 
   useEffect(() => {
@@ -31,6 +33,8 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
         if (executor) {
           setExecutorName(executor.nome);
         }
+      } else {
+        setExecutorName(null);
       }
     };
 
@@ -46,25 +50,23 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
   const canTakeAction = () => {
     if (!userProfile) return false;
     
-    // Gestor pode fazer todas as ações
-    if (userProfile.perfil === 'Gestor') return true;
+    if (userProfile.perfil === 'Gestor') {
+        if (chamado.status === 'Resolvido') return true;
+        if (chamado.status === 'Aberto') return true;
+    }
 
     if (userProfile.perfil === 'Executor') {
       return chamado.status === 'Aberto' || 
-             (chamado.status === 'Em Andamento' && chamado.executorId === userProfile.id);
+             (chamado.status === 'Em Andamento' && chamado.executorId === currentUser.uid);
     }
     
     return false;
   };
 
   const getActionText = () => {
-    if (userProfile?.perfil === 'Gestor') {
-      if (chamado.status === 'Resolvido') return 'Revisar';
-      if (chamado.status === 'Aberto') return 'Assumir';
-      if (chamado.status === 'Em Andamento') return 'Resolver';
-    }
+    if (chamado.status === 'Resolvido' && userProfile?.perfil === 'Gestor') return 'Revisar';
     if (chamado.status === 'Aberto') return 'Assumir';
-    if (chamado.status === 'Em Andamento') return 'Resolver';
+    if (chamado.status === 'Em Andamento' && chamado.executorId === currentUser.uid) return 'Resolver';
     return '';
   };
 
@@ -72,8 +74,17 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-lg">{chamado.titulo}</CardTitle>
-          <div className="flex gap-2">
+          <CardTitle className="text-lg flex items-center gap-2">
+            {chamado.titulo}
+            {/* ✅ 2. ADICIONADO: Bloco para a flag visual de revisão */}
+            {chamado.recusadoAnteriormente && chamado.status === 'Em Andamento' && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Revisão
+              </Badge>
+            )}
+          </CardTitle>
+          <div className="flex flex-col items-end gap-2">
             <Badge className={statusColors[chamado.status] || 'bg-gray-100 text-gray-800'}>
               {chamado.status}
             </Badge>
@@ -82,7 +93,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
             </Badge>
           </div>
         </div>
-        <CardDescription className="line-clamp-2">
+        <CardDescription className="line-clamp-2 mt-1">
           {chamado.descricao}
         </CardDescription>
       </CardHeader>
@@ -115,7 +126,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
           >
             Ver Detalhes
           </Button>
-          {canTakeAction() && (
+          {canTakeAction() && getActionText() && (
             <Button 
               size="sm" 
               onClick={() => onTakeAction(chamado)}
