@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { doc, onSnapshot } from 'firebase/firestore'; // ✅ CORREÇÃO: Removido 'getDoc' que não era utilizado
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   updateChamado, 
   getUsuario,
-  getUsuariosPorPerfil, // ✅ Adicionando novas importações
+  getUsuariosPorPerfil,
   addComentario 
 } from '../services/firestore';
 import { db } from '../lib/firebase';
@@ -42,7 +42,6 @@ export default function ChamadoDetails() {
     justificativa: ''
   });
 
-  // ✅ NOVOS ESTADOS para as novas funcionalidades
   const [executores, setExecutores] = useState([]);
   const [selectedExecutor, setSelectedExecutor] = useState('');
   const [novoComentario, setNovoComentario] = useState('');
@@ -65,7 +64,7 @@ export default function ChamadoDetails() {
         if (chamadoData.executorId) {
           setExecutor(await getUsuario(chamadoData.executorId));
         } else {
-          setExecutor(null); // Garante que o executor seja limpo se o chamado for reaberto
+          setExecutor(null);
         }
       }
       setLoading(false);
@@ -74,7 +73,6 @@ export default function ChamadoDetails() {
     return () => unsubscribe();
   }, [id]);
   
-  // ✅ Efeito para buscar a lista de executores para o modal
   useEffect(() => {
     if (userProfile?.perfil === 'Gestor') {
       const fetchExecutores = async () => {
@@ -96,8 +94,6 @@ export default function ChamadoDetails() {
     return '';
   };
   
-  // ✅ CORREÇÃO: Removida a função getNextStatus que não era utilizada.
-
   // --- Funções de Ação ---
 
   const handleAction = async () => {
@@ -184,6 +180,26 @@ export default function ChamadoDetails() {
     };
     await addComentario(id, comentarioData);
     setNovoComentario('');
+  };
+
+  // ✅ NOVA FUNÇÃO PARA ARQUIVAR O CHAMADO
+  const handleArquivar = async () => {
+    if (!chamado || userProfile.perfil !== 'Gestor') return;
+
+    setActionLoading(true);
+    try {
+      await updateChamado(
+        chamado.id,
+        { arquivado: true },
+        currentUser.uid,
+        'Arquivou o chamado'
+      );
+      navigate('/dashboard'); // Volta para o dashboard após arquivar
+    } catch (error) {
+      setError('Erro ao arquivar o chamado.');
+      console.error('Error archiving chamado:', error);
+    }
+    setActionLoading(false);
   };
 
   if (loading) {
@@ -326,6 +342,25 @@ export default function ChamadoDetails() {
                       </Dialog>
                     )}
                   </div>
+                  
+                  {/* ✅ BOTÃO E LÓGICA DE ARQUIVAMENTO */}
+                  {chamado.status === 'Aprovado' && userProfile?.perfil === 'Gestor' && (
+                    <div className="mt-4 pt-4 border-t">
+                      <Button 
+                        variant="outline"
+                        onClick={handleArquivar}
+                        disabled={actionLoading}
+                        className="w-full"
+                      >
+                        {actionLoading ? (
+                           <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Arquivando...</>
+                        ) : 'Arquivar Chamado'}
+                      </Button>
+                      <p className="text-xs text-gray-500 mt-2 text-center">
+                        Esta ação irá remover o chamado do dashboard principal.
+                      </p>
+                    </div>
+                  )}
 
                 </CardContent>
               </Card>

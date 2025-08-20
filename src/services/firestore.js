@@ -20,6 +20,7 @@ export const createChamado = async (chamadoData) => {
     const docRef = await addDoc(collection(db, 'chamados'), {
       ...chamadoData,
       status: 'Aberto',
+      arquivado: false,
       criadoEm: serverTimestamp(),
       historico: [{
         autor: chamadoData.solicitanteId,
@@ -62,11 +63,12 @@ export const getChamados = async (filters = {}) => {
   }
 };
 
+// ✅ FUNÇÃO CORRIGIDA
 export const updateChamado = async (chamadoId, updates, userId, acao) => {
   try {
     const chamadoRef = doc(db, 'chamados', chamadoId);
     
-    // Get current chamado to update history
+    // Busca o estado atual do chamado para tomar a decisão correta
     const chamadoDoc = await getDoc(chamadoRef);
     const currentData = chamadoDoc.data();
     
@@ -82,13 +84,16 @@ export const updateChamado = async (chamadoId, updates, userId, acao) => {
       historico: [...(currentData.historico || []), newHistoryEntry]
     };
     
-    // Add timestamps based on status
-    if (updates.status === 'Em Andamento') {
+    // --- LÓGICA CORRIGIDA ---
+    // Apenas define o executorId e a data se o chamado estiver sendo ASSUMIDO (vindo de 'Aberto')
+    if (updates.status === 'Em Andamento' && currentData.status === 'Aberto') {
       updatedData.assumidoEm = serverTimestamp();
       updatedData.executorId = userId;
     } else if (updates.status === 'Resolvido') {
       updatedData.resolvidoEm = serverTimestamp();
     }
+    // Se um chamado for RECUSADO (status atual 'Resolvido' -> novo status 'Em Andamento'),
+    // a condição acima será falsa e o executorId NÃO será alterado, preservando o executor original.
     
     await updateDoc(chamadoRef, updatedData);
   } catch (error) {
@@ -100,6 +105,8 @@ export const updateChamado = async (chamadoId, updates, userId, acao) => {
 export const subscribeToChamados = (filters, callback) => {
   try {
     let q = collection(db, 'chamados');
+
+    q = query(q, where("arquivado", "==", false));
     
     if (filters.solicitanteId) {
       q = query(q, where('solicitanteId', '==', filters.solicitanteId));
