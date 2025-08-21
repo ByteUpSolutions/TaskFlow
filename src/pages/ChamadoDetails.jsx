@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
   updateChamado, 
   getUsuario,
-  getUsuariosPorPerfil,
+  getAssignableUsers, // ✅ Alterado para a nova função que busca Executores e Gestores
   addComentario 
 } from '../services/firestore';
 import { db } from '../lib/firebase';
@@ -42,7 +42,8 @@ export default function ChamadoDetails() {
     justificativa: ''
   });
 
-  const [executores, setExecutores] = useState([]);
+  // O nome do estado foi mantido como 'executores' para simplicidade, mas agora contém gestores também.
+  const [executores, setExecutores] = useState([]); 
   const [selectedExecutor, setSelectedExecutor] = useState('');
   const [novoComentario, setNovoComentario] = useState('');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -75,10 +76,12 @@ export default function ChamadoDetails() {
   
   useEffect(() => {
     if (userProfile?.perfil === 'Gestor') {
-      const fetchExecutores = async () => {
-        setExecutores(await getUsuariosPorPerfil('Executor'));
+      const fetchAssignableUsers = async () => {
+        // ✅ Utiliza a nova função para buscar todos os usuários que podem receber chamados
+        const users = await getAssignableUsers();
+        setExecutores(users);
       };
-      fetchExecutores();
+      fetchAssignableUsers();
     }
   }, [userProfile]);
 
@@ -182,7 +185,6 @@ export default function ChamadoDetails() {
     setNovoComentario('');
   };
 
-  // ✅ NOVA FUNÇÃO PARA ARQUIVAR O CHAMADO
   const handleArquivar = async () => {
     if (!chamado || userProfile.perfil !== 'Gestor') return;
 
@@ -194,7 +196,7 @@ export default function ChamadoDetails() {
         currentUser.uid,
         'Arquivou o chamado'
       );
-      navigate('/dashboard'); // Volta para o dashboard após arquivar
+      navigate('/dashboard');
     } catch (error) {
       setError('Erro ao arquivar o chamado.');
       console.error('Error archiving chamado:', error);
@@ -331,10 +333,17 @@ export default function ChamadoDetails() {
                         <DialogContent>
                           <DialogHeader><DialogTitle>Transferir Chamado</DialogTitle></DialogHeader>
                           <div className="space-y-4 py-4">
-                            <Label>Selecione o novo executor</Label>
+                            <Label>Selecione o novo responsável</Label>
                             <Select onValueChange={setSelectedExecutor}>
                               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                              <SelectContent>{executores.map(exec => (<SelectItem key={exec.id} value={exec.id}>{exec.nome}</SelectItem>))}</SelectContent>
+                              <SelectContent>
+                                {/* ✅ Alterado para exibir o perfil do usuário */}
+                                {executores.map(user => (
+                                  <SelectItem key={user.id} value={user.id}>
+                                    {user.nome} ({user.perfil})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
                             </Select>
                             <Button onClick={handleTransferirChamado} className="w-full">Confirmar</Button>
                           </div>
@@ -343,7 +352,6 @@ export default function ChamadoDetails() {
                     )}
                   </div>
                   
-                  {/* ✅ BOTÃO E LÓGICA DE ARQUIVAMENTO */}
                   {chamado.status === 'Aprovado' && userProfile?.perfil === 'Gestor' && (
                     <div className="mt-4 pt-4 border-t">
                       <Button 

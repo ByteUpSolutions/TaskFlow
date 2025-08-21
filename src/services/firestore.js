@@ -201,3 +201,32 @@ export const updateUserAccessStatus = async (userId, newStatus) => {
     throw error;
   }
 };
+
+// ✅ NOVA FUNÇÃO: Buscar todos os usuários que podem receber um chamado
+export const getAssignableUsers = async () => {
+  try {
+    // Busca os executores
+    const executoresQuery = query(collection(db, 'usuarios'), where('perfil', '==', 'Executor'));
+    // Busca os gestores
+    const gestoresQuery = query(collection(db, 'usuarios'), where('perfil', '==', 'Gestor'));
+
+    const [executoresSnapshot, gestoresSnapshot] = await Promise.all([
+      getDocs(executoresQuery),
+      getDocs(gestoresQuery)
+    ]);
+
+    const usuarios = [];
+    executoresSnapshot.forEach((doc) => {
+      usuarios.push({ id: doc.id, ...doc.data() });
+    });
+    gestoresSnapshot.forEach((doc) => {
+      usuarios.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Ordena por nome para a lista aparecer organizada
+    return usuarios.sort((a, b) => a.nome.localeCompare(b.nome));
+  } catch (error) {
+    console.error('Erro ao buscar usuários para transferência:', error);
+    throw error;
+  }
+};
