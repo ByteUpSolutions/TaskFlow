@@ -43,6 +43,7 @@ export function AuthProvider({ children }) {
       email: user.email,
       nome: userData.nome,
       perfil: userData.perfil,
+      acesso: 'pendente'
     });
 
     return userCredential;

@@ -1,56 +1,44 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import AguardandoAprovacao from './pages/AguardandoAprovacao';
 import Dashboard from './pages/Dashboard';
+import Aprovacoes from './pages/Aprovacoes';
 import NewChamado from './pages/NewChamado';
 import ChamadoDetails from './pages/ChamadoDetails';
 import './App.css';
 
+// Agrupa rotas que usam o mesmo Layout
+const AppLayout = () => (
+  <Layout><Outlet /></Layout>
+);
+
 function App() {
   return (
     <AuthProvider>
-      {/* A propriedade 'basename' corrige o roteamento para o GitHub Pages */}
       <Router basename="/TaskFlow">
-        <div className="App">
-          <Routes>
-            {/* --- Rotas Públicas --- */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+        <Routes>
+          {/* Rotas Públicas */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/aguardando-aprovacao" element={<AguardandoAprovacao />} />
 
-            {/* --- Rotas Protegidas (só para usuários logados) --- */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/novo-chamado" 
-              element={
-                <ProtectedRoute>
-                  <NewChamado />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/chamado/:id" 
-              element={
-                <ProtectedRoute>
-                  <ChamadoDetails />
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* --- Rota Padrão --- */}
-            {/* Redireciona a rota raiz ("/") para o dashboard */}
-            <Route path="/" element={<Navigate to="/dashboard" />} />
-          </Routes>
-        </div>
+          {/* Rotas Protegidas com Layout */}
+          <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/aprovacoes" element={<Aprovacoes />} />
+          </Route>
+          
+          {/* Rotas Protegidas sem Layout (tela cheia) */}
+          <Route path="/novo-chamado" element={<ProtectedRoute><NewChamado /></ProtectedRoute>} />
+          <Route path="/chamado/:id" element={<ProtectedRoute><ChamadoDetails /></ProtectedRoute>} />
+          
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+        </Routes>
       </Router>
     </AuthProvider>
   );

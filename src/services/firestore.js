@@ -173,3 +173,31 @@ export const getUsuario = async (userId) => {
   }
 };
 
+// ✅ NOVA FUNÇÃO: Buscar usuários com acesso pendente
+export const getUsuariosPendentes = async () => {
+  try {
+    const q = query(collection(db, 'usuarios'), where('acesso', '==', 'pendente'));
+    const querySnapshot = await getDocs(q);
+    const usuarios = [];
+    querySnapshot.forEach((doc) => {
+      usuarios.push({ id: doc.id, ...doc.data() });
+    });
+    return usuarios;
+  } catch (error) {
+    console.error('Erro ao buscar usuários pendentes:', error);
+    throw error;
+  }
+};
+
+// ✅ NOVA FUNÇÃO: Atualizar o status de acesso de um usuário
+export const updateUserAccessStatus = async (userId, newStatus) => {
+  try {
+    const userRef = doc(db, 'usuarios', userId);
+    await updateDoc(userRef, {
+      acesso: newStatus
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar status de acesso do usuário:', error);
+    throw error;
+  }
+};
