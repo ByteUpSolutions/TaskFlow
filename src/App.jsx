@@ -9,6 +9,8 @@ import AguardandoAprovacao from './pages/AguardandoAprovacao';
 import Dashboard from './pages/Dashboard';
 import Aprovacoes from './pages/Aprovacoes';
 import NewChamado from './pages/NewChamado';
+import Arquivados from './pages/Arquivados';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import ChamadoDetails from './pages/ChamadoDetails';
 import './App.css';
 
@@ -31,6 +33,8 @@ function App() {
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/aprovacoes" element={<Aprovacoes />} />
+            <Route path="/arquivados" element={<Arquivados />} />
+            <Route path="/analytics" element={<AnalyticsDashboard />} />
           </Route>
           
           {/* Rotas Protegidas sem Layout (tela cheia) */}

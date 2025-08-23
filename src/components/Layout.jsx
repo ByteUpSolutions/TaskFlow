@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from './ui/button';
-import { LogOut, User, UserCheck } from 'lucide-react';
+import { LogOut, User, UserCheck, Archive, LineChart } from 'lucide-react';
 import { getUsuariosPendentes } from '../services/firestore';
 import { useQuery } from '@tanstack/react-query';
 
@@ -10,7 +10,6 @@ export default function Layout({ children }) {
   const { userProfile, logout } = useAuth();
   const navigate = useNavigate();
 
-  // ✅ CORREÇÃO: useQuery agora usa um objeto como argumento
   const { data: pendentesCount } = useQuery({
     queryKey: ['usuariosPendentesCount'],
     queryFn: getUsuariosPendentes,
@@ -34,7 +33,26 @@ export default function Layout({ children }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/dashboard" className="text-xl font-semibold text-gray-900">TaskFlow</Link>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2"> {/* Reduzido o space-x para caber mais itens */}
+              
+              {/* ✅ Link para o Dashboard Analítico (só para Gestores) */}
+              {userProfile?.perfil === 'Gestor' && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/analytics">
+                    <LineChart className="h-4 w-4 mr-2" />
+                    Analytics
+                  </Link>
+                </Button>
+              )}
+
+              {/* ✅ ADICIONADO: Link para a nova página de Arquivados */}
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/arquivados">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Arquivados
+                </Link>
+              </Button>
+
               {userProfile?.perfil === 'Gestor' && (
                 <Button variant="ghost" size="sm" asChild>
                   <Link to="/aprovacoes" className="relative">

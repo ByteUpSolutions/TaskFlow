@@ -10,7 +10,8 @@ import {
   onSnapshot,
   serverTimestamp,
   getDoc,
-  arrayUnion
+  arrayUnion,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -21,6 +22,8 @@ export const createChamado = async (chamadoData) => {
       ...chamadoData,
       status: 'Aberto',
       arquivado: false,
+      tempoGasto: 0,
+      workIntervals: [],
       criadoEm: serverTimestamp(),
       historico: [{
         autor: chamadoData.solicitanteId,
@@ -229,4 +232,88 @@ export const getAssignableUsers = async () => {
     console.error('Erro ao buscar usuários para transferência:', error);
     throw error;
   }
+};
+
+// ✅ NOVA FUNÇÃO: Buscar chamados que estão arquivados
+export const subscribeToArquivados = (callback) => {
+  try {
+    const q = query(
+      collection(db, 'chamados'), 
+      where('arquivado', '==', true),
+      orderBy('criadoEm', 'desc')
+    );
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const chamados = [];
+      querySnapshot.forEach((doc) => {
+        chamados.push({ id: doc.id, ...doc.data() });
+      });
+      callback(chamados);
+    });
+  } catch (error) {
+    console.error('Erro ao buscar chamados arquivados:', error);
+    // Lembre-se de criar o índice no Firebase se o console pedir!
+    throw error;
+  }
+};
+
+// ✅ NOVA FUNÇÃO: Buscar TODOS os chamados para análise
+export const getAllChamadosForAnalytics = async () => {
+  try {
+    const q = query(collection(db, 'chamados'), orderBy('criadoEm', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const chamados = [];
+    querySnapshot.forEach((doc) => {
+      chamados.push({ id: doc.id, ...doc.data() });
+    });
+    return chamados;
+  } catch (error) {
+    console.error('Erro ao buscar todos os chamados:', error);
+    throw error;
+  }
+};
+
+// ✅ NOVA FUNÇÃO: Buscar TODOS os usuários para análise
+export const getAllUsers = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'usuarios'));
+    const usuarios = [];
+    querySnapshot.forEach((doc) => {
+      usuarios.push({ id: doc.id, ...doc.data() });
+    });
+    return usuarios;
+  } catch (error) {
+    console.error('Erro ao buscar todos os usuários:', error);
+    throw error;
+  }
+};
+
+// ✅ NOVA FUNÇÃO AUXILIAR: Pára o cronômetro e atualiza o tempo total
+export const stopAndCalculateTime = async (chamadoId) => {
+  const chamadoRef = doc(db, 'chamados', chamadoId);
+  const chamadoDoc = await getDoc(chamadoRef);
+  const chamadoData = chamadoDoc.data();
+
+  // Se não houver um timer rodando, não faz nada
+  if (!chamadoData.timerStartedAt) {
+    return chamadoData.tempoGasto || 0;
+  }
+
+  const startTime = chamadoData.timerStartedAt.toDate();
+  const endTime = new Date();
+  const durationInSeconds = Math.round((endTime - startTime) / 1000);
+  const newTotalTime = (chamadoData.tempoGasto || 0) + durationInSeconds;
+
+  await updateDoc(chamadoRef, {
+    // Adiciona o intervalo de trabalho ao histórico
+    workIntervals: arrayUnion({
+      start: startTime,
+      end: endTime,
+      durationInSeconds: durationInSeconds
+    }),
+    tempoGasto: newTotalTime, // Atualiza o total de segundos
+    timerStartedAt: deleteField() // ✅ Remove o campo que marca o início do timer
+  });
+
+  return newTotalTime;
 };

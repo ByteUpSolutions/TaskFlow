@@ -46,6 +46,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
   };
 
   const canTakeAction = () => {
+    if (chamado.arquivado) return false; // Não pode fazer ação em chamado arquivado
     if (!userProfile) return false;
     if (userProfile.perfil === 'Gestor') {
       if (chamado.status === 'Resolvido' || chamado.status === 'Aberto') return true;
@@ -66,14 +67,10 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
   return (
     <Card className="hover:shadow-md transition-shadow flex flex-col h-full">
       <CardHeader className="pb-4">
-        {/* ✅ --- ÁREA CORRIGIDA COM O NOVO LAYOUT --- ✅ */}
-        
-        {/* Título quebra a palavra para evitar overflow */}
         <CardTitle className="text-lg break-words">
           {chamado.titulo}
         </CardTitle>
         
-        {/* Contêiner para as badges, que agora fica abaixo do título */}
         <div className="flex flex-wrap items-center gap-2 pt-2">
           <Badge className={statusColors[chamado.status] || 'bg-gray-100 text-gray-800'}>
             {chamado.status}
@@ -114,12 +111,13 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
           )}
         </div>
         
-        <div className="flex gap-2 mt-4 pt-4 border-t">
+        {/* ✅ ÁREA DOS BOTÕES CORRIGIDA */}
+        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => onViewDetails(chamado)}
-            className="flex-1"
+            className="flex-grow min-w-[120px]" // Garante uma largura mínima
           >
             Ver Detalhes
           </Button>
@@ -127,7 +125,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
             <Button 
               size="sm" 
               onClick={() => onTakeAction(chamado)}
-              className="flex-1"
+              className="flex-grow min-w-[120px]" // Garante uma largura mínima
             >
               {getActionText()}
             </Button>
