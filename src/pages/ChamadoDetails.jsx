@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp } from 'firebase/firestore'; // Importar serverTimestamp
 import { useAuth } from '../contexts/AuthContext';
 import { 
   updateChamado, 
   getUsuario,
-  getAssignableUsers, // ✅ Alterado para a nova função que busca Executores e Gestores
-  addComentario 
+  getAssignableUsers,
+  addComentario,
+  stopAndCalculateTime // ✅ Importar a nova função
 } from '../services/firestore';
 import { db } from '../lib/firebase';
 
 // Componentes da UI
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -25,113 +25,93 @@ import { ArrowLeft, Clock, User, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function ChamadoDetails() {
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   
-  // Estados do componente
   const [chamado, setChamado] = useState(null);
   const [solicitante, setSolicitante] = useState(null);
   const [executor, setExecutor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // ✅ Removido 'tempoGasto' do estado inicial
   const [actionData, setActionData] = useState({
-    tempoGasto: '',
     notasResolucao: '',
     justificativa: ''
   });
 
-  // O nome do estado foi mantido como 'executores' para simplicidade, mas agora contém gestores também.
   const [executores, setExecutores] = useState([]); 
   const [selectedExecutor, setSelectedExecutor] = useState('');
   const [novoComentario, setNovoComentario] = useState('');
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
-  const showAction = searchParams.get('action') === 'true';
-
   useEffect(() => {
     if (!id) return;
-
-    // Monitora o chamado em tempo real
     const unsubscribe = onSnapshot(doc(db, 'chamados', id), async (doc) => {
       if (doc.exists()) {
         const chamadoData = { id: doc.id, ...doc.data() };
         setChamado(chamadoData);
-
-        if (chamadoData.solicitanteId) {
-          setSolicitante(await getUsuario(chamadoData.solicitanteId));
-        }
-        if (chamadoData.executorId) {
-          setExecutor(await getUsuario(chamadoData.executorId));
-        } else {
-          setExecutor(null);
-        }
+        if (chamadoData.solicitanteId) setSolicitante(await getUsuario(chamadoData.solicitanteId));
+        if (chamadoData.executorId) setExecutor(await getUsuario(chamadoData.executorId));
+        else setExecutor(null);
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [id]);
   
   useEffect(() => {
     if (userProfile?.perfil === 'Gestor') {
-      const fetchAssignableUsers = async () => {
-        // ✅ Utiliza a nova função para buscar todos os usuários que podem receber chamados
-        const users = await getAssignableUsers();
-        setExecutores(users);
-      };
+      const fetchAssignableUsers = async () => setExecutores(await getAssignableUsers());
       fetchAssignableUsers();
     }
   }, [userProfile]);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleString('pt-BR');
+    return timestamp.toDate ? timestamp.toDate().toLocaleString('pt-BR') : new Date(timestamp).toLocaleString('pt-BR');
   };
 
-  const getActionText = () => {
-    if (chamado.status === 'Aberto') return 'Assumir Chamado';
-    if (chamado.status === 'Em Andamento') return 'Marcar como Resolvido';
-    return '';
+  // ✅ NOVA FUNÇÃO: Formatar segundos para HH:MM:SS
+  const formatTime = (totalSeconds) => {
+    if (totalSeconds === null || totalSeconds === undefined) return '00:00:00';
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map(v => v < 10 ? "0" + v : v).join(":");
   };
   
-  // --- Funções de Ação ---
+  // --- Funções de Ação ATUALIZADAS para o cronômetro ---
 
-  const handleAction = async () => {
-    if (!chamado || !currentUser) return;
-
-    try {
-      setActionLoading(true);
-      setError('');
-
-      if (chamado.status === 'Aberto') {
-        await updateChamado(chamado.id, {
-          status: 'Em Andamento',
-          executorId: currentUser.uid
-        }, currentUser.uid, 'Assumiu o chamado');
-      } else if (chamado.status === 'Em Andamento') {
-        if (!actionData.tempoGasto) {
-          setError('Tempo gasto é obrigatório');
-          setActionLoading(false);
-          return;
-        }
-        await updateChamado(chamado.id, {
-          status: 'Resolvido',
-          tempoGasto: parseFloat(actionData.tempoGasto),
-          notasResolucao: actionData.notasResolucao
-        }, currentUser.uid, 'Resolveu o chamado');
-      }
-      navigate('/dashboard');
-    } catch (err) {
-      setError('Erro ao executar ação. Tente novamente.');
-      console.error('Error taking action:', err);
-    } finally {
-      setActionLoading(false);
+  const handleStartTimer = async () => {
+    const updates = {
+      status: 'Em Andamento',
+      timerStartedAt: serverTimestamp()
+    };
+    if (!chamado.executorId) {
+      updates.executorId = currentUser.uid;
     }
+    await updateChamado(id, updates, currentUser.uid, 'Iniciou o trabalho no chamado');
   };
 
+  const handlePauseTimer = async () => {
+    await stopAndCalculateTime(id);
+    await updateChamado(id, { status: 'Pausado' }, currentUser.uid, 'Pausou o trabalho no chamado');
+  };
+
+  const handleResolveChamado = async () => {
+    setActionLoading(true);
+    const finalTime = await stopAndCalculateTime(id);
+    await updateChamado(id, {
+      status: 'Resolvido',
+      tempoGasto: finalTime,
+      notasResolucao: actionData.notasResolucao
+    }, currentUser.uid, 'Resolveu o chamado');
+    setActionLoading(false);
+    navigate('/dashboard');
+  };
+  
   const handleGestorAction = async (novoStatus) => {
     if (!chamado || !currentUser) return;
 
@@ -159,13 +139,6 @@ export default function ChamadoDetails() {
     }
   };
   
-  const handlePauseToggle = async () => {
-    if (!chamado) return;
-    const novoStatus = chamado.status === 'Pausado' ? 'Em Andamento' : 'Pausado';
-    const acao = novoStatus === 'Pausado' ? 'Pausou o chamado' : 'Retomou o chamado';
-    await updateChamado(id, { status: novoStatus }, currentUser.uid, acao);
-  };
-
   const handleTransferirChamado = async () => {
     if (!selectedExecutor) return setError('Selecione um novo executor.');
     const novoExecutor = executores.find(e => e.id === selectedExecutor);
@@ -196,7 +169,7 @@ export default function ChamadoDetails() {
         currentUser.uid,
         'Arquivou o chamado'
       );
-      navigate('/dashboard');
+      navigate('/dashboard'); 
     } catch (error) {
       setError('Erro ao arquivar o chamado.');
       console.error('Error archiving chamado:', error);
@@ -224,7 +197,7 @@ export default function ChamadoDetails() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="mr-4">
+            <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="mr-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -241,6 +214,13 @@ export default function ChamadoDetails() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-2xl">{chamado.titulo}</CardTitle>
+                    {/* ✅ INDICADOR DE CRONÔMETRO ATIVO */}
+                    {chamado.timerStartedAt && (
+                      <div className="flex items-center gap-2 text-green-600 mt-2 animate-pulse">
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                        <span className="text-sm font-medium">Cronômetro ativo...</span>
+                      </div>
+                    )}
                     <CardDescription className="mt-2">Chamado #{chamado.id.slice(-8)}</CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -295,22 +275,36 @@ export default function ChamadoDetails() {
               </CardContent>
             </Card>
 
-            {(showAction || (userProfile?.perfil === 'Executor' || userProfile?.perfil === 'Gestor')) && (
+            {!chamado.arquivado && (userProfile?.perfil === 'Executor' || userProfile?.perfil === 'Gestor') && (
               <Card>
                 <CardHeader><CardTitle>Ações do Chamado</CardTitle></CardHeader>
                 <CardContent>
                   {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
                   
-                  {chamado.status === 'Aberto' && (userProfile?.perfil === 'Executor' || userProfile?.perfil === 'Gestor') && (
-                    <Button onClick={handleAction} disabled={actionLoading} className="w-full">{actionLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</> : getActionText()}</Button>
+                  {/* ✅ LÓGICA DE AÇÕES ATUALIZADA */}
+                  {chamado.status === 'Aberto' && (
+                    <Button onClick={handleStartTimer} disabled={actionLoading} className="w-full">
+                      {actionLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Iniciando...</> : 'Assumir e Iniciar Trabalho'}
+                    </Button>
                   )}
 
                   {chamado.status === 'Em Andamento' && chamado.executorId === currentUser.uid && (
                     <div className="space-y-4">
-                      <div><Label htmlFor="tempoGasto">Tempo Gasto (horas)</Label><Input id="tempoGasto" type="number" step="0.5" placeholder="Ex: 2.5" value={actionData.tempoGasto} onChange={(e) => setActionData({...actionData, tempoGasto: e.target.value})} /></div>
-                      <div><Label htmlFor="notasResolucao">Notas de Resolução</Label><Textarea id="notasResolucao" placeholder="Descreva como o problema foi resolvido..." value={actionData.notasResolucao} onChange={(e) => setActionData({...actionData, notasResolucao: e.target.value})} rows={4}/></div>
-                      <Button onClick={handleAction} disabled={actionLoading} className="w-full">{actionLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</> : getActionText()}</Button>
+                      <div>
+                        <Label htmlFor="notasResolucao">Notas de Resolução (Obrigatório para resolver)</Label>
+                        <Textarea id="notasResolucao" value={actionData.notasResolucao} onChange={(e) => setActionData({...actionData, notasResolucao: e.target.value})} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={handlePauseTimer} disabled={actionLoading} variant="outline" className="flex-1">Pausar</Button>
+                        <Button onClick={handleResolveChamado} disabled={actionLoading || !actionData.notasResolucao} className="flex-1">Marcar como Resolvido</Button>
+                      </div>
                     </div>
+                  )}
+
+                  {chamado.status === 'Pausado' && chamado.executorId === currentUser.uid && (
+                    <Button onClick={handleStartTimer} disabled={actionLoading} className="w-full">
+                      {actionLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Retomando...</> : 'Retomar Trabalho'}
+                    </Button>
                   )}
 
                   {chamado.status === 'Resolvido' && userProfile?.perfil === 'Gestor' && (
@@ -324,9 +318,6 @@ export default function ChamadoDetails() {
                   )}
                   
                   <div className="flex flex-wrap gap-2 mt-4">
-                    {['Em Andamento', 'Pausado'].includes(chamado.status) && chamado.executorId === currentUser.uid && (
-                      <Button onClick={handlePauseToggle} variant="outline">{chamado.status === 'Pausado' ? 'Retomar' : 'Pausar'}</Button>
-                    )}
                     {userProfile?.perfil === 'Gestor' && ['Em Andamento', 'Pausado'].includes(chamado.status) && (
                       <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
                         <DialogTrigger asChild><Button variant="outline">Transferir</Button></DialogTrigger>
@@ -337,7 +328,6 @@ export default function ChamadoDetails() {
                             <Select onValueChange={setSelectedExecutor}>
                               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                               <SelectContent>
-                                {/* ✅ Alterado para exibir o perfil do usuário */}
                                 {executores.map(user => (
                                   <SelectItem key={user.id} value={user.id}>
                                     {user.nome} ({user.perfil})
@@ -352,7 +342,7 @@ export default function ChamadoDetails() {
                     )}
                   </div>
                   
-                  {chamado.status === 'Aprovado' && userProfile?.perfil === 'Gestor' && (
+                  {chamado.status === 'Aprovado' && userProfile?.perfil === 'Gestor' && !chamado.arquivado && (
                     <div className="mt-4 pt-4 border-t">
                       <Button 
                         variant="outline"
@@ -369,14 +359,34 @@ export default function ChamadoDetails() {
                       </p>
                     </div>
                   )}
-
                 </CardContent>
               </Card>
             )}
+
+            {chamado.arquivado && (
+              <Alert variant="default" className="bg-blue-50 border-blue-200">
+                <AlertCircle className="h-4 w-4 text-blue-700" />
+                <AlertDescription className="text-blue-800">
+                  Este chamado está arquivado e serve apenas para consulta. Nenhuma nova ação pode ser realizada.
+                </AlertDescription>
+              </Alert>
+            )}
+
           </div>
           
           <div className="space-y-6">
-            <Card><CardHeader><CardTitle className="text-lg">Informações</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Criado em</p><p className="text-sm text-gray-600">{formatDate(chamado.criadoEm)}</p></div></div><div className="flex items-center gap-2"><User className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Solicitante</p><p className="text-sm text-gray-600">{solicitante?.nome || 'Carregando...'}</p></div></div>{executor && (<div className="flex items-center gap-2"><User className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Executor</p><p className="text-sm text-gray-600">{executor.nome}</p></div></div>)}{chamado.assumidoEm && (<div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Assumido em</p><p className="text-sm text-gray-600">{formatDate(chamado.assumidoEm)}</p></div></div>)}{chamado.resolvidoEm && (<div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Resolvido em</p><p className="text-sm text-gray-600">{formatDate(chamado.resolvidoEm)}</p></div></div>)}{chamado.tempoGasto && (<div className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Tempo Gasto</p><p className="text-sm text-gray-600">{chamado.tempoGasto}h</p></div></div>)}</CardContent></Card>
+            <Card><CardHeader><CardTitle className="text-lg">Informações</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Criado em</p><p className="text-sm text-gray-600">{formatDate(chamado.criadoEm)}</p></div></div><div className="flex items-center gap-2"><User className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Solicitante</p><p className="text-sm text-gray-600">{solicitante?.nome || 'Carregando...'}</p></div></div>{executor && (<div className="flex items-center gap-2"><User className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Executor</p><p className="text-sm text-gray-600">{executor.nome}</p></div></div>)}{chamado.assumidoEm && (<div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Assumido em</p><p className="text-sm text-gray-600">{formatDate(chamado.assumidoEm)}</p></div></div>)}{chamado.resolvidoEm && (<div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Resolvido em</p><p className="text-sm text-gray-600">{formatDate(chamado.resolvidoEm)}</p></div></div>)}
+                {/* ✅ EXIBIÇÃO DO TEMPO FORMATADO */}
+                {chamado.tempoGasto > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium">Tempo Gasto</p>
+                      <p className="text-sm text-gray-600 font-mono">{formatTime(chamado.tempoGasto)}</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent></Card>
             <Card><CardHeader><CardTitle className="text-lg">Histórico</CardTitle></CardHeader><CardContent><div className="space-y-3 max-h-60 overflow-y-auto pr-2">{chamado.historico?.sort((a, b) => b.timestamp.toDate() - a.timestamp.toDate()).map((evento, index) => (<div key={index} className="border-l-2 border-gray-200 pl-4 pb-3"><p className="text-sm font-medium">{evento.acao}</p><p className="text-xs text-gray-500">{formatDate(evento.timestamp)}</p>{evento.detalhes && (<p className="text-xs text-gray-600 mt-1">{evento.detalhes}</p>)}</div>))}</div></CardContent></Card>
           </div>
         </div>
