@@ -30,33 +30,32 @@ export default function AnalyticsDashboard() {
     const filteredChamados = allChamados.filter(chamado => {
       if (dateRange === 'all') return true;
       if (!chamado.criadoEm?.toDate) return false;
-
       const criadoDate = chamado.criadoEm.toDate();
       let interval;
-      if (dateRange === 'year') {
-        interval = { start: startOfYear(now), end: endOfDay(now) };
-      } else if (dateRange === 'month') {
-        interval = { start: startOfMonth(now), end: endOfDay(now) };
-      } else if (dateRange === 'week') {
-        interval = { start: startOfWeek(now), end: endOfDay(now) };
-      }
+      if (dateRange === 'year') interval = { start: startOfYear(now), end: endOfDay(now) };
+      if (dateRange === 'month') interval = { start: startOfMonth(now), end: endOfDay(now) };
+      if (dateRange === 'week') interval = { start: startOfWeek(now), end: endOfDay(now) };
       return isWithinInterval(criadoDate, interval);
     });
 
-    // ✅ --- LÓGICA DE CÁLCULO DE TEMPO CORRIGIDA --- ✅
-
-    // 1. Filtra apenas os chamados APROVADOS que possuem um tempoGasto válido.
+    // ✅ --- LÓGICA DE CÁLCULO DE TEMPO FINAL E CORRIGIDA --- ✅
     const chamadosAprovados = filteredChamados.filter(
       c => c.status === 'Aprovado' && typeof c.tempoGasto === 'number' && c.tempoGasto > 0
     );
 
-    // 2. Soma o tempoGasto (em segundos) de todos os chamados aprovados.
-    const totalSegundosGastos = chamadosAprovados.reduce((acc, c) => acc + c.tempoGasto, 0);
+    const totalSegundosGastos = chamadosAprovados.reduce((acc, c) => {
+      const tempo = c.tempoGasto;
+      // Heurística: Se o tempo for menor que 1000, provavelmente está em horas (legado).
+      // Se for maior, é do novo sistema (em segundos).
+      if (tempo < 1000) {
+        return acc + (tempo * 3600); // Converte horas para segundos
+      }
+      return acc + tempo; // Já está em segundos
+    }, 0);
 
-    // 3. Calcula a média e a converte para horas.
     const mediaTempoResolucao = chamadosAprovados.length > 0
-      ? (totalSegundosGastos / chamadosAprovados.length / 3600).toFixed(2) // (Total segundos / N chamados) / 3600 s/h
-      : 0;
+      ? (totalSegundosGastos / chamadosAprovados.length / 3600).toFixed(2)
+      : "0.00";
 
     // --- Fim da correção ---
 
@@ -70,12 +69,18 @@ export default function AnalyticsDashboard() {
 
     const userMetrics = allUsers.map(user => {
       const resolvidos = filteredChamados.filter(c => c.executorId === user.uid && c.status === 'Aprovado');
-      const totalTempoSegundos = resolvidos.reduce((acc, c) => acc + (c.tempoGasto || 0), 0);
-      const mediaTempo = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600).toFixed(2) : 0;
+      const totalTempoSegundos = resolvidos.reduce((acc, c) => {
+        const tempo = c.tempoGasto || 0;
+        if (tempo < 1000) {
+          return acc + (tempo * 3600);
+        }
+        return acc + tempo;
+      }, 0);
+      const mediaTempo = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600).toFixed(2) : "0.00";
       return {
         nome: user.nome,
         chamadosResolvidos: resolvidos.length,
-        mediaTempoGasto: parseFloat(mediaTempo)
+        mediaTempoGasto: mediaTempo
       };
     }).sort((a, b) => b.chamadosResolvidos - a.chamadosResolvidos);
 
