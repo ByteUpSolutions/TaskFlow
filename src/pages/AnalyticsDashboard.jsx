@@ -5,13 +5,29 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { startOfYear, startOfMonth, startOfWeek, endOfDay, isWithinInterval } from 'date-fns';
-import { Loader2, TrendingUp, Clock, Users } from 'lucide-react';
+import { Loader2, TrendingUp, Clock, Users, ChevronDown } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../components/ui/collapsible";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
+const formatTime = (totalSeconds) => {
+  if (totalSeconds === null || totalSeconds === undefined) return '00:00:00';
+  const seconds = totalSeconds < 1000 ? totalSeconds * 3600 : totalSeconds;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  return [hours, minutes, secs].map(v => v < 10 ? "0" + v : v).join(":");
+};
+
+
 export default function AnalyticsDashboard() {
   const [dateRange, setDateRange] = useState('all');
+  const [openRow, setOpenRow] = useState(null); 
 
   const { data: allChamados, isLoading: isLoadingChamados } = useQuery({
     queryKey: ['allChamados'],
@@ -38,26 +54,19 @@ export default function AnalyticsDashboard() {
       return isWithinInterval(criadoDate, interval);
     });
 
-    // ✅ --- LÓGICA DE CÁLCULO DE TEMPO FINAL E CORRIGIDA --- ✅
     const chamadosAprovados = filteredChamados.filter(
       c => c.status === 'Aprovado' && typeof c.tempoGasto === 'number' && c.tempoGasto > 0
     );
 
     const totalSegundosGastos = chamadosAprovados.reduce((acc, c) => {
       const tempo = c.tempoGasto;
-      // Heurística: Se o tempo for menor que 1000, provavelmente está em horas (legado).
-      // Se for maior, é do novo sistema (em segundos).
-      if (tempo < 1000) {
-        return acc + (tempo * 3600); // Converte horas para segundos
-      }
-      return acc + tempo; // Já está em segundos
+      if (tempo < 1000) return acc + (tempo * 3600);
+      return acc + tempo;
     }, 0);
 
     const mediaTempoResolucao = chamadosAprovados.length > 0
       ? (totalSegundosGastos / chamadosAprovados.length / 3600).toFixed(2)
       : "0.00";
-
-    // --- Fim da correção ---
 
     const dataStatus = Object.entries(filteredChamados.reduce((acc, c) => {
       acc[c.status] = (acc[c.status] || 0) + 1; return acc;
@@ -71,16 +80,15 @@ export default function AnalyticsDashboard() {
       const resolvidos = filteredChamados.filter(c => c.executorId === user.uid && c.status === 'Aprovado');
       const totalTempoSegundos = resolvidos.reduce((acc, c) => {
         const tempo = c.tempoGasto || 0;
-        if (tempo < 1000) {
-          return acc + (tempo * 3600);
-        }
+        if (tempo < 1000) return acc + (tempo * 3600);
         return acc + tempo;
       }, 0);
       const mediaTempo = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600).toFixed(2) : "0.00";
       return {
         nome: user.nome,
         chamadosResolvidos: resolvidos.length,
-        mediaTempoGasto: mediaTempo
+        mediaTempoGasto: mediaTempo,
+        listaDeChamados: resolvidos
       };
     }).sort((a, b) => b.chamadosResolvidos - a.chamadosResolvidos);
 
@@ -115,6 +123,7 @@ export default function AnalyticsDashboard() {
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users/> Total de Usuários</CardTitle><CardDescription className="text-3xl font-bold">{allUsers.length}</CardDescription></CardHeader></Card>
       </div>
 
+      {/* ✅ GRÁFICOS RESTAURADOS AQUI */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>Chamados por Status</CardTitle></CardHeader>
@@ -150,19 +159,52 @@ export default function AnalyticsDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Usuário</TableHead>
+                <TableHead className="w-[50%]">Usuário</TableHead>
                 <TableHead className="text-center">Chamados Aprovados</TableHead>
                 <TableHead className="text-right">Tempo Médio (horas)</TableHead>
               </TableRow>
             </TableHeader>
+            
             <TableBody>
-              {metrics.userMetrics.map(user => (
-                <TableRow key={user.nome}>
-                  <TableCell className="font-medium">{user.nome}</TableCell>
-                  <TableCell className="text-center">{user.chamadosResolvidos}</TableCell>
-                  <TableCell className="text-right">{user.mediaTempoGasto}</TableCell>
-                </TableRow>
-              ))}
+              {metrics.userMetrics.map(user => {
+                const isOpen = openRow === user.nome;
+                return (
+                  <React.Fragment key={user.nome}>
+                    <TableRow 
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => setOpenRow(isOpen ? null : user.nome)}
+                    >
+                      <TableCell className="font-medium flex items-center gap-2">
+                         <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                         {user.nome}
+                      </TableCell>
+                      <TableCell className="text-center">{user.chamadosResolvidos}</TableCell>
+                      <TableCell className="text-right">{user.mediaTempoGasto}</TableCell>
+                    </TableRow>
+                    {isOpen && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="p-0 bg-gray-50/50">
+                          <div className="p-4">
+                            <h4 className="font-semibold mb-2 ml-2">Chamados Resolvidos por {user.nome}</h4>
+                            {user.listaDeChamados.length > 0 ? (
+                              <div className="space-y-2">
+                                {user.listaDeChamados.map(chamado => (
+                                  <div key={chamado.id} className="flex justify-between items-center p-2 border-b last:border-b-0">
+                                    <span className="text-sm text-gray-700 truncate pr-4">{chamado.titulo}</span>
+                                    <span className="text-sm font-mono text-gray-900 bg-gray-200 px-2 py-1 rounded-md">{formatTime(chamado.tempoGasto)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 text-center py-4">Nenhum chamado para exibir neste período.</p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>

@@ -45,8 +45,17 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
     return date.toLocaleDateString('pt-BR');
   };
 
+  // ✅ 1. ADICIONADA A FUNÇÃO DE FORMATAR O TEMPO
+  const formatTime = (totalSeconds) => {
+    if (totalSeconds === null || totalSeconds === undefined || totalSeconds === 0) return null;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map(v => v < 10 ? "0" + v : v).join(":");
+  };
+
   const canTakeAction = () => {
-    if (chamado.arquivado) return false; // Não pode fazer ação em chamado arquivado
+    if (chamado.arquivado) return false;
     if (!userProfile) return false;
     if (userProfile.perfil === 'Gestor') {
       if (chamado.status === 'Resolvido' || chamado.status === 'Aberto') return true;
@@ -103,21 +112,21 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
               <span>Executor: {executorName}</span>
             </div>
           )}
-          {chamado.tempoGasto && (
+          {/* ✅ 2. A EXIBIÇÃO DO TEMPO AGORA USA A FUNÇÃO CORRETA */}
+          {formatTime(chamado.tempoGasto) && (
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              <span>Tempo gasto: {chamado.tempoGasto}h</span>
+              <span>Tempo gasto: {formatTime(chamado.tempoGasto)}</span>
             </div>
           )}
         </div>
         
-        {/* ✅ ÁREA DOS BOTÕES CORRIGIDA */}
         <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => onViewDetails(chamado)}
-            className="flex-grow min-w-[120px]" // Garante uma largura mínima
+            className="flex-grow min-w-[120px]"
           >
             Ver Detalhes
           </Button>
@@ -125,7 +134,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
             <Button 
               size="sm" 
               onClick={() => onTakeAction(chamado)}
-              className="flex-grow min-w-[120px]" // Garante uma largura mínima
+              className="flex-grow min-w-[120px]"
             >
               {getActionText()}
             </Button>
