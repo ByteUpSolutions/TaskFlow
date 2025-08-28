@@ -9,7 +9,12 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar as CalendarIcon } from 'lucide-react'; // ✅ Importar ícone de calendário
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'; // ✅ Importar Popover
+import { Calendar } from '../components/ui/calendar'; // ✅ Importar Calendário
+import { cn } from '../lib/utils'; // ✅ Importar cn
+import { format } from 'date-fns'; // ✅ Importar format
+import { ptBR } from 'date-fns/locale'; // ✅ Importar locale pt-BR
 
 export default function NewChamado() {
   const [formData, setFormData] = useState({
@@ -17,6 +22,7 @@ export default function NewChamado() {
     descricao: '',
     prioridade: ''
   });
+  const [prazo, setPrazo] = useState(null); // ✅ Novo estado para o prazo
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { currentUser, userProfile } = useAuth();
@@ -42,7 +48,10 @@ export default function NewChamado() {
     if (!formData.prioridade) {
       return setError('Selecione uma prioridade');
     }
-
+     // ✅ Validação do prazo
+    if (!prazo) {
+      return setError('Selecione um prazo para a conclusão');
+    }
     // Apenas Gestores podem criar chamados
     if (userProfile?.perfil !== 'Gestor') {
       return setError('Apenas gestores podem criar chamados.');
@@ -56,7 +65,7 @@ export default function NewChamado() {
         titulo: formData.titulo,
         descricao: formData.descricao,
         prioridade: formData.prioridade,
-        // O solicitante agora é o próprio gestor que está criando o chamado
+        prazo: prazo, // ✅ Adicionar o prazo aos dados do chamado
         solicitanteId: currentUser.uid 
       };
 
@@ -160,7 +169,34 @@ export default function NewChamado() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                
               </div>
+              {/* ✅ NOVO CAMPO DE PRAZO COM CALENDÁRIO */}
+                <div className="space-y-2">
+                  <Label htmlFor="prazo">Prazo de Conclusão</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !prazo && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {prazo ? format(prazo, "PPP", { locale: ptBR }) : <span>Selecione uma data</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={prazo}
+                        onSelect={setPrazo}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
               <div className="flex gap-4 pt-4">
                 <Button 

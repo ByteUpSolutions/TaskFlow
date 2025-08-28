@@ -24,6 +24,14 @@ const formatTime = (totalSeconds) => {
   return [hours, minutes, secs].map(v => v < 10 ? "0" + v : v).join(":");
 };
 
+// ✅ NOVA FUNÇÃO: Formata horas decimais (ex: 3.5) para "3h 30m"
+const formatDecimalHours = (decimalHours) => {
+  if (decimalHours === null || decimalHours === undefined || isNaN(decimalHours)) return "0h 0m";
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  return `${hours}h ${minutes}m`;
+};
+
 
 export default function AnalyticsDashboard() {
   const [dateRange, setDateRange] = useState('all');
@@ -64,9 +72,10 @@ export default function AnalyticsDashboard() {
       return acc + tempo;
     }, 0);
 
-    const mediaTempoResolucao = chamadosAprovados.length > 0
-      ? (totalSegundosGastos / chamadosAprovados.length / 3600).toFixed(2)
-      : "0.00";
+    // ✅ O cálculo agora retorna um número decimal, não uma string formatada
+    const mediaTempoResolucaoDecimal = chamadosAprovados.length > 0
+      ? (totalSegundosGastos / chamadosAprovados.length / 3600)
+      : 0;
 
     const dataStatus = Object.entries(filteredChamados.reduce((acc, c) => {
       acc[c.status] = (acc[c.status] || 0) + 1; return acc;
@@ -83,16 +92,17 @@ export default function AnalyticsDashboard() {
         if (tempo < 1000) return acc + (tempo * 3600);
         return acc + tempo;
       }, 0);
-      const mediaTempo = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600).toFixed(2) : "0.00";
+      // ✅ O cálculo agora retorna um número decimal
+      const mediaTempoDecimal = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600) : 0;
       return {
         nome: user.nome,
         chamadosResolvidos: resolvidos.length,
-        mediaTempoGasto: mediaTempo,
+        mediaTempoGastoDecimal: mediaTempoDecimal,
         listaDeChamados: resolvidos
       };
     }).sort((a, b) => b.chamadosResolvidos - a.chamadosResolvidos);
 
-    return { totalChamados: filteredChamados.length, mediaTempoResolucao, dataStatus, dataPrioridade, userMetrics };
+    return { totalChamados: filteredChamados.length, mediaTempoResolucaoDecimal, dataStatus, dataPrioridade, userMetrics };
   }, [allChamados, allUsers, dateRange]);
 
   if (isLoadingChamados || isLoadingUsers) {
@@ -119,11 +129,11 @@ export default function AnalyticsDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp/> Total de Chamados</CardTitle><CardDescription className="text-3xl font-bold">{metrics.totalChamados}</CardDescription></CardHeader></Card>
-        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Clock/> Tempo Médio de Resolução</CardTitle><CardDescription className="text-3xl font-bold">{metrics.mediaTempoResolucao} horas</CardDescription></CardHeader></Card>
+        {/* ✅ A exibição agora usa a nova função de formatação */}
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><Clock/> Tempo Médio de Resolução</CardTitle><CardDescription className="text-3xl font-bold">{formatDecimalHours(metrics.mediaTempoResolucaoDecimal)}</CardDescription></CardHeader></Card>
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users/> Total de Usuários</CardTitle><CardDescription className="text-3xl font-bold">{allUsers.length}</CardDescription></CardHeader></Card>
       </div>
 
-      {/* ✅ GRÁFICOS RESTAURADOS AQUI */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>Chamados por Status</CardTitle></CardHeader>
@@ -161,10 +171,9 @@ export default function AnalyticsDashboard() {
               <TableRow>
                 <TableHead className="w-[50%]">Usuário</TableHead>
                 <TableHead className="text-center">Chamados Aprovados</TableHead>
-                <TableHead className="text-right">Tempo Médio (horas)</TableHead>
+                <TableHead className="text-right">Tempo Médio</TableHead>
               </TableRow>
             </TableHeader>
-            
             <TableBody>
               {metrics.userMetrics.map(user => {
                 const isOpen = openRow === user.nome;
@@ -179,7 +188,8 @@ export default function AnalyticsDashboard() {
                          {user.nome}
                       </TableCell>
                       <TableCell className="text-center">{user.chamadosResolvidos}</TableCell>
-                      <TableCell className="text-right">{user.mediaTempoGasto}</TableCell>
+                      {/* ✅ A exibição agora usa a nova função de formatação */}
+                      <TableCell className="text-right">{formatDecimalHours(user.mediaTempoGastoDecimal)}</TableCell>
                     </TableRow>
                     {isOpen && (
                       <TableRow>

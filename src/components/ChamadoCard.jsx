@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Clock, User, AlertCircle, AlertTriangle } from 'lucide-react';
+// ✅ 1. Importar o ícone de Calendário
+import { Clock, User, AlertCircle, AlertTriangle, CalendarDays } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUsuario } from '../services/firestore';
 
@@ -45,7 +46,6 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
     return date.toLocaleDateString('pt-BR');
   };
 
-  // ✅ 1. ADICIONADA A FUNÇÃO DE FORMATAR O TEMPO
   const formatTime = (totalSeconds) => {
     if (totalSeconds === null || totalSeconds === undefined || totalSeconds === 0) return null;
     const hours = Math.floor(totalSeconds / 3600);
@@ -53,6 +53,15 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
     const seconds = totalSeconds % 60;
     return [hours, minutes, seconds].map(v => v < 10 ? "0" + v : v).join(":");
   };
+  
+  // ✅ 2. Lógica para formatar e verificar o prazo
+  const formatPrazo = (timestamp) => {
+    if (!timestamp) return null;
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('pt-BR');
+  };
+  
+  const isOverdue = chamado.prazo && new Date() > chamado.prazo.toDate() && chamado.status !== 'Aprovado';
 
   const canTakeAction = () => {
     if (chamado.arquivado) return false;
@@ -112,11 +121,17 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
               <span>Executor: {executorName}</span>
             </div>
           )}
-          {/* ✅ 2. A EXIBIÇÃO DO TEMPO AGORA USA A FUNÇÃO CORRETA */}
           {formatTime(chamado.tempoGasto) && (
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
               <span>Tempo gasto: {formatTime(chamado.tempoGasto)}</span>
+            </div>
+          )}
+          {/* ✅ 3. ADICIONADO: Exibição do prazo com destaque para atrasados */}
+          {chamado.prazo && (
+            <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-600 font-semibold' : ''}`}>
+              <CalendarDays className="h-4 w-4" />
+              <span>Prazo: {formatPrazo(chamado.prazo)}</span>
             </div>
           )}
         </div>
