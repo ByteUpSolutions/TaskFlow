@@ -9,12 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { ArrowLeft, Loader2, Calendar as CalendarIcon } from 'lucide-react'; // ✅ Importar ícone de calendário
-import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'; // ✅ Importar Popover
-import { Calendar } from '../components/ui/calendar'; // ✅ Importar Calendário
-import { cn } from '../lib/utils'; // ✅ Importar cn
-import { format } from 'date-fns'; // ✅ Importar format
-import { ptBR } from 'date-fns/locale'; // ✅ Importar locale pt-BR
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function NewChamado() {
   const [formData, setFormData] = useState({
@@ -22,7 +17,8 @@ export default function NewChamado() {
     descricao: '',
     prioridade: ''
   });
-  const [prazo, setPrazo] = useState(null); // ✅ Novo estado para o prazo
+  // ✅ 1. O estado 'prazo' agora guardará a data como uma string (ex: "2025-12-31")
+  const [prazo, setPrazo] = useState(''); 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { currentUser, userProfile } = useAuth();
@@ -48,11 +44,9 @@ export default function NewChamado() {
     if (!formData.prioridade) {
       return setError('Selecione uma prioridade');
     }
-     // ✅ Validação do prazo
     if (!prazo) {
       return setError('Selecione um prazo para a conclusão');
     }
-    // Apenas Gestores podem criar chamados
     if (userProfile?.perfil !== 'Gestor') {
       return setError('Apenas gestores podem criar chamados.');
     }
@@ -65,7 +59,8 @@ export default function NewChamado() {
         titulo: formData.titulo,
         descricao: formData.descricao,
         prioridade: formData.prioridade,
-        prazo: prazo, // ✅ Adicionar o prazo aos dados do chamado
+        // ✅ 2. Converte a string de data para um objeto Date antes de salvar
+        prazo: new Date(prazo), 
         solicitanteId: currentUser.uid 
       };
 
@@ -81,7 +76,6 @@ export default function NewChamado() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
@@ -99,7 +93,6 @@ export default function NewChamado() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card>
           <CardHeader>
@@ -134,7 +127,7 @@ export default function NewChamado() {
                 <Textarea
                   id="descricao"
                   name="descricao"
-                  placeholder="Forneça uma descrição detalhada do problema, incluindo passos para reproduzir, contexto e qualquer informação relevante"
+                  placeholder="Forneça uma descrição detalhada do problema..."
                   value={formData.descricao}
                   onChange={handleChange}
                   rows={6}
@@ -142,61 +135,34 @@ export default function NewChamado() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="prioridade">Prioridade</Label>
-                <Select onValueChange={handlePrioridadeChange} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a prioridade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Baixa">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
-                        Baixa - Não urgente, pode aguardar
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Média">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
-                        Média - Importante, mas não crítico
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Alta">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-red-400 rounded-full mr-2"></div>
-                        Alta - Urgente, precisa de atenção imediata
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="prioridade">Prioridade</Label>
+                  <Select onValueChange={handlePrioridadeChange} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a prioridade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Baixa">Baixa</SelectItem>
+                      <SelectItem value="Média">Média</SelectItem>
+                      <SelectItem value="Alta">Alta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 
-              </div>
-              {/* ✅ NOVO CAMPO DE PRAZO COM CALENDÁRIO */}
+                {/* ✅ 3. CAMPO DE PRAZO SUBSTITUÍDO PELO INPUT NATIVO */}
                 <div className="space-y-2">
                   <Label htmlFor="prazo">Prazo de Conclusão</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !prazo && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {prazo ? format(prazo, "PPP", { locale: ptBR }) : <span>Selecione uma data</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={prazo}
-                        onSelect={setPrazo}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Input
+                    id="prazo"
+                    type="date"
+                    value={prazo}
+                    onChange={(e) => setPrazo(e.target.value)}
+                    required
+                    className="block w-full"
+                  />
                 </div>
+              </div>
 
               <div className="flex gap-4 pt-4">
                 <Button 
