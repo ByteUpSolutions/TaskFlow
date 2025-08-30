@@ -15,16 +15,16 @@ import {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
+// ✅ 1. FUNÇÃO DE FORMATAR O TEMPO SIMPLIFICADA
 const formatTime = (totalSeconds) => {
   if (totalSeconds === null || totalSeconds === undefined) return '00:00:00';
-  const seconds = totalSeconds < 1000 ? totalSeconds * 3600 : totalSeconds;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
+  // Agora assume que o valor é sempre em segundos
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
   return [hours, minutes, secs].map(v => v < 10 ? "0" + v : v).join(":");
 };
 
-// ✅ NOVA FUNÇÃO: Formata horas decimais (ex: 3.5) para "3h 30m"
 const formatDecimalHours = (decimalHours) => {
   if (decimalHours === null || decimalHours === undefined || isNaN(decimalHours)) return "0h 0m";
   const hours = Math.floor(decimalHours);
@@ -66,13 +66,10 @@ export default function AnalyticsDashboard() {
       c => c.status === 'Aprovado' && typeof c.tempoGasto === 'number' && c.tempoGasto > 0
     );
 
-    const totalSegundosGastos = chamadosAprovados.reduce((acc, c) => {
-      const tempo = c.tempoGasto;
-      if (tempo < 1000) return acc + (tempo * 3600);
-      return acc + tempo;
-    }, 0);
+    // ✅ 2. LÓGICA DE CÁLCULO SIMPLIFICADA
+    // Removemos a verificação de dados legados e somamos diretamente os segundos
+    const totalSegundosGastos = chamadosAprovados.reduce((acc, c) => acc + c.tempoGasto, 0);
 
-    // ✅ O cálculo agora retorna um número decimal, não uma string formatada
     const mediaTempoResolucaoDecimal = chamadosAprovados.length > 0
       ? (totalSegundosGastos / chamadosAprovados.length / 3600)
       : 0;
@@ -87,12 +84,8 @@ export default function AnalyticsDashboard() {
 
     const userMetrics = allUsers.map(user => {
       const resolvidos = filteredChamados.filter(c => c.executorId === user.uid && c.status === 'Aprovado');
-      const totalTempoSegundos = resolvidos.reduce((acc, c) => {
-        const tempo = c.tempoGasto || 0;
-        if (tempo < 1000) return acc + (tempo * 3600);
-        return acc + tempo;
-      }, 0);
-      // ✅ O cálculo agora retorna um número decimal
+      // ✅ 3. LÓGICA DE CÁLCULO SIMPLIFICADA AQUI TAMBÉM
+      const totalTempoSegundos = resolvidos.reduce((acc, c) => acc + (c.tempoGasto || 0), 0);
       const mediaTempoDecimal = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600) : 0;
       return {
         nome: user.nome,
@@ -113,6 +106,7 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="space-y-8">
+      {/* ... (Cabeçalho e KPIs - sem alterações) ... */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Dashboard Analítico</h2>
@@ -129,11 +123,12 @@ export default function AnalyticsDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp/> Total de Chamados</CardTitle><CardDescription className="text-3xl font-bold">{metrics.totalChamados}</CardDescription></CardHeader></Card>
-        {/* ✅ A exibição agora usa a nova função de formatação */}
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Clock/> Tempo Médio de Resolução</CardTitle><CardDescription className="text-3xl font-bold">{formatDecimalHours(metrics.mediaTempoResolucaoDecimal)}</CardDescription></CardHeader></Card>
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users/> Total de Usuários</CardTitle><CardDescription className="text-3xl font-bold">{allUsers.length}</CardDescription></CardHeader></Card>
       </div>
 
+
+      {/* ... (Gráficos e Tabela - sem alterações) ... */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>Chamados por Status</CardTitle></CardHeader>
@@ -188,7 +183,6 @@ export default function AnalyticsDashboard() {
                          {user.nome}
                       </TableCell>
                       <TableCell className="text-center">{user.chamadosResolvidos}</TableCell>
-                      {/* ✅ A exibição agora usa a nova função de formatação */}
                       <TableCell className="text-right">{formatDecimalHours(user.mediaTempoGastoDecimal)}</TableCell>
                     </TableRow>
                     {isOpen && (
