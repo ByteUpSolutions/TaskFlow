@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-// ✅ 1. Importar o ícone de Calendário
 import { Clock, User, AlertCircle, AlertTriangle, CalendarDays } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUsuario } from '../services/firestore';
@@ -53,8 +52,8 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
     const seconds = totalSeconds % 60;
     return [hours, minutes, seconds].map(v => v < 10 ? "0" + v : v).join(":");
   };
-  
-  // ✅ 2. Lógica para formatar e verificar o prazo
+
+  // ✅ Lógica para formatar e verificar o prazo (já estava no seu código)
   const formatPrazo = (timestamp) => {
     if (!timestamp) return null;
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -62,6 +61,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
   };
   
   const isOverdue = chamado.prazo && new Date() > chamado.prazo.toDate() && chamado.status !== 'Aprovado';
+
 
   const canTakeAction = () => {
     if (chamado.arquivado) return false;
@@ -127,7 +127,7 @@ export default function ChamadoCard({ chamado, onViewDetails, onTakeAction }) {
               <span>Tempo gasto: {formatTime(chamado.tempoGasto)}</span>
             </div>
           )}
-          {/* ✅ 3. ADICIONADO: Exibição do prazo com destaque para atrasados */}
+          {/* ✅ ALTERAÇÃO APLICADA AQUI: Exibição do prazo */}
           {chamado.prazo && (
             <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-600 font-semibold' : ''}`}>
               <CalendarDays className="h-4 w-4" />

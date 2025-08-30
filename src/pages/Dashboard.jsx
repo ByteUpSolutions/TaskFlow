@@ -16,10 +16,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!currentUser || !userProfile) return;
-    const unsubscribe = subscribeToChamados({}, (chamadosData) => {
+
+    // ✅ LÓGICA DE FILTRO ATUALIZADA
+    const filters = {};
+    // Se o usuário é um Executor, ele só verá os chamados aos quais está atribuído.
+    // Gestores continuarão a ver todos os chamados, pois nenhum filtro é aplicado para eles.
+    if (userProfile.perfil === 'Executor') {
+      filters.executorIdContains = currentUser.uid;
+    }
+
+    const unsubscribe = subscribeToChamados(filters, (chamadosData) => {
       setChamados(chamadosData);
       setLoading(false);
     });
+    
     return () => unsubscribe();
   }, [currentUser, userProfile]);
 
@@ -60,7 +70,6 @@ export default function Dashboard() {
         <Card><CardHeader className="pb-2"><CardDescription>Finalizados</CardDescription><CardTitle className="text-2xl text-green-600">{getChamadosByStatus('Aprovado').length}</CardTitle></CardHeader></Card>
       </div>
 
-      {/* ✅ TABS CORRIGIDOS COM AS DUAS VISÕES */}
       <Tabs defaultValue="kanban" className="space-y-4">
         <TabsList>
           <TabsTrigger value="kanban">Visão Kanban</TabsTrigger>

@@ -21,6 +21,7 @@ export const createChamado = async (chamadoData) => {
     const docRef = await addDoc(collection(db, 'chamados'), {
       ...chamadoData,
       status: 'Aberto',
+      executorIds: [],
       arquivado: false,
       tempoGasto: 0,
       workIntervals: [],
@@ -107,20 +108,31 @@ export const updateChamado = async (chamadoId, updates, userId, acao) => {
 
 export const subscribeToChamados = (filters, callback) => {
   try {
-    let q = collection(db, 'chamados');
+    let q = collection(db, "chamados");
 
+    // Filtra para mostrar apenas chamados não arquivados
     q = query(q, where("arquivado", "==", false));
-    
+
     if (filters.solicitanteId) {
-      q = query(q, where('solicitanteId', '==', filters.solicitanteId));
+      q = query(q, where("solicitanteId", "==", filters.solicitanteId));
     }
-    
+
+    // ✅ ALTERAÇÃO APLICADA AQUI
+    // Se o filtro executorIdContains for passado (para o perfil Executor),
+    // busca apenas os chamados onde o array 'executorIds' contém o ID do usuário.
+    if (filters.executorIdContains) {
+      q = query(
+        q,
+        where("executorIds", "array-contains", filters.executorIdContains)
+      );
+    }
+
     if (filters.status) {
-      q = query(q, where('status', '==', filters.status));
+      q = query(q, where("status", "==", filters.status));
     }
-    
-    q = query(q, orderBy('criadoEm', 'desc'));
-    
+
+    q = query(q, orderBy("criadoEm", "desc"));
+
     return onSnapshot(q, (querySnapshot) => {
       const chamados = [];
       querySnapshot.forEach((doc) => {
@@ -129,7 +141,9 @@ export const subscribeToChamados = (filters, callback) => {
       callback(chamados);
     });
   } catch (error) {
-    console.error('Error subscribing to chamados:', error);
+    console.error("Error subscribing to chamados:", error);
+    // Lembre-se que pode ser necessário criar um novo índice no Firestore.
+    // O console do navegador mostrará um link para criá-lo com um clique.
     throw error;
   }
 };
