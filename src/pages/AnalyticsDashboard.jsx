@@ -7,11 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { startOfYear, startOfMonth, startOfWeek, endOfDay, isWithinInterval } from 'date-fns';
 import { Loader2, TrendingUp, Clock, Users, ChevronDown } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "../components/ui/collapsible";
+// ❌ O componente Collapsible foi removido para evitar erros de estrutura HTML
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -32,9 +28,9 @@ const formatDecimalHours = (decimalHours) => {
   return `${hours}h ${minutes}m`;
 };
 
-
 export default function AnalyticsDashboard() {
   const [dateRange, setDateRange] = useState('all');
+  // ✅ NOVO ESTADO para controlar qual linha está aberta
   const [openRow, setOpenRow] = useState(null); 
 
   const { data: allChamados, isLoading: isLoadingChamados } = useQuery({
@@ -83,11 +79,27 @@ export default function AnalyticsDashboard() {
     }, {})).map(([name, value]) => ({ name, value }));
 
     const userMetrics = allUsers.map(user => {
-      const resolvidos = filteredChamados.filter(c => c.executorId === user.uid && c.status === 'Aprovado');
+      const resolvidos = filteredChamados.filter(c => 
+        c.status === 'Aprovado' && 
+        (c.executorIds?.includes(user.uid) || c.executorId === user.uid)
+      );
+
       // ✅ 3. LÓGICA DE CÁLCULO SIMPLIFICADA AQUI TAMBÉM
-      const totalTempoSegundos = resolvidos.reduce((acc, c) => acc + (c.tempoGasto || 0), 0);
-      const mediaTempoDecimal = resolvidos.length > 0 ? (totalTempoSegundos / resolvidos.length / 3600) : 0;
+      const totalTempoSegundosIndividual = resolvidos.reduce((acc, c) => {
+        if (c.timeTracking && c.timeTracking[user.uid]) {
+          return acc + (c.timeTracking[user.uid].totalSeconds || 0);
+        }
+        // Fallback para o tempo total, assumindo que é para o único executor (dado legado)
+        if(c.executorId === user.uid) {
+            return acc + (c.tempoGasto || 0);
+        }
+        return acc;
+      }, 0);
+      
+      const mediaTempoDecimal = resolvidos.length > 0 ? (totalTempoSegundosIndividual / resolvidos.length / 3600) : 0;
+
       return {
+        uid: user.uid,
         nome: user.nome,
         chamadosResolvidos: resolvidos.length,
         mediaTempoGastoDecimal: mediaTempoDecimal,
@@ -106,7 +118,6 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* ... (Cabeçalho e KPIs - sem alterações) ... */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Dashboard Analítico</h2>
@@ -127,8 +138,6 @@ export default function AnalyticsDashboard() {
         <Card><CardHeader><CardTitle className="flex items-center gap-2"><Users/> Total de Usuários</CardTitle><CardDescription className="text-3xl font-bold">{allUsers.length}</CardDescription></CardHeader></Card>
       </div>
 
-
-      {/* ... (Gráficos e Tabela - sem alterações) ... */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>Chamados por Status</CardTitle></CardHeader>
@@ -166,7 +175,7 @@ export default function AnalyticsDashboard() {
               <TableRow>
                 <TableHead className="w-[50%]">Usuário</TableHead>
                 <TableHead className="text-center">Chamados Aprovados</TableHead>
-                <TableHead className="text-right">Tempo Médio</TableHead>
+                <TableHead className="text-right">Tempo Médio Individual</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -195,7 +204,9 @@ export default function AnalyticsDashboard() {
                                 {user.listaDeChamados.map(chamado => (
                                   <div key={chamado.id} className="flex justify-between items-center p-2 border-b last:border-b-0">
                                     <span className="text-sm text-gray-700 truncate pr-4">{chamado.titulo}</span>
-                                    <span className="text-sm font-mono text-gray-900 bg-gray-200 px-2 py-1 rounded-md">{formatTime(chamado.tempoGasto)}</span>
+                                    <span className="text-sm font-mono text-gray-900 bg-gray-200 px-2 py-1 rounded-md">
+                                      {formatTime(chamado.timeTracking?.[user.uid]?.totalSeconds || chamado.tempoGasto)}
+                                    </span>
                                   </div>
                                 ))}
                               </div>
@@ -216,3 +227,4 @@ export default function AnalyticsDashboard() {
     </div>
   );
 }
+

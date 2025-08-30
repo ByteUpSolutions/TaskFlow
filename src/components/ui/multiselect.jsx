@@ -31,27 +31,22 @@ export function MultiSelect({ options, selected, onChange, className, ...props }
                     variant="secondary"
                     key={option.value}
                     className="mr-1"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Evita que o popover feche
-                      handleUnselect(option.value);
-                    }}
                   >
                     {option.label}
-                    <button
-                        className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                handleUnselect(option.value);
-                            }
-                        }}
+                    {/* ✅ CORREÇÃO: Trocado <button> por <div> para evitar aninhamento */}
+                    <div
+                        className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                         onMouseDown={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                         }}
-                        onClick={() => handleUnselect(option.value)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnselect(option.value);
+                        }}
                     >
                         <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                    </button>
+                    </div>
                   </Badge>
                 ))
             ) : (

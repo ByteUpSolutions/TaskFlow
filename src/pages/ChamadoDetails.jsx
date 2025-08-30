@@ -7,7 +7,8 @@ import {
   getUsuario,
   getAssignableUsers,
   addComentario,
-  stopAndCalculateTime
+  stopUserTimer, // Alterado para a função de tempo individual
+  startUserTimer
 } from '../services/firestore';
 import { db } from '../lib/firebase';
 
@@ -88,29 +89,43 @@ export default function ChamadoDetails() {
     return [hours, minutes, seconds].map(v => v < 10 ? "0" + v : v).join(":");
   };
   
+  // --- Lógica de permissão e estado do cronómetro ---
+  const isCurrentUserExecutor = chamado?.executorIds?.includes(currentUser.uid);
+  const currentUserTimeStatus = chamado?.timeTracking?.[currentUser.uid]?.status;
+  
   // --- Funções de Ação ATUALIZADAS para múltiplos usuários ---
 
-  const handleStartTimer = async () => {
-    // Adiciona o usuário atual à lista de executores se ele já não estiver nela
-    const updates = {
-      status: 'Em Andamento',
-      timerStartedAt: serverTimestamp(),
-      executorIds: arrayUnion(currentUser.uid)
-    };
-    await updateChamado(id, updates, currentUser.uid, `${userProfile.nome} começou a trabalhar no chamado`);
+  const handleJoinAndStartWork = async () => {
+    setActionLoading(true);
+    // Adiciona o utilizador à lista de responsáveis
+    await updateChamado(id, { executorIds: arrayUnion(currentUser.uid) }, currentUser.uid, `${userProfile.nome} juntou-se ao chamado.`);
+    // Inicia o seu cronómetro individual
+    await startUserTimer(id, currentUser.uid);
+    setActionLoading(false);
   };
 
-  const handlePauseTimer = async () => {
-    await stopAndCalculateTime(id);
-    await updateChamado(id, { status: 'Pausado' }, currentUser.uid, 'Pausou o trabalho no chamado');
+  const handleToggleMyTimer = async () => {
+    setActionLoading(true);
+    if (currentUserTimeStatus === 'tracking') {
+      await stopUserTimer(id, currentUser.uid);
+      await updateChamado(id, {}, currentUser.uid, `${userProfile.nome} pausou o trabalho.`);
+    } else {
+      await startUserTimer(id, currentUser.uid);
+      await updateChamado(id, {}, currentUser.uid, `${userProfile.nome} retomou o trabalho.`);
+    }
+    setActionLoading(false);
   };
 
   const handleResolveChamado = async () => {
     setActionLoading(true);
-    const finalTime = await stopAndCalculateTime(id);
+    // Para o cronómetro de todos os que estiverem a trabalhar
+    for (const userId of chamado.executorIds) {
+        if(chamado.timeTracking?.[userId]?.status === 'tracking'){
+            await stopUserTimer(id, userId);
+        }
+    }
     await updateChamado(id, {
       status: 'Resolvido',
-      tempoGasto: finalTime,
       notasResolucao: actionData.notasResolucao
     }, currentUser.uid, 'Marcou o chamado como Resolvido');
     setActionLoading(false);
@@ -190,9 +205,6 @@ export default function ChamadoDetails() {
     setActionLoading(false);
   };
 
-  // ✅ Lógica de permissão atualizada para verificar se o usuário está na lista
-  const isCurrentUserExecutor = chamado?.executorIds?.includes(currentUser.uid);
-
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-32 w-32 animate-spin text-blue-600" /></div>;
   }
@@ -230,23 +242,22 @@ export default function ChamadoDetails() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-2xl">{chamado.titulo}</CardTitle>
-                    {chamado.timerStartedAt && (
-                      <div className="flex items-center gap-2 text-green-600 mt-2 animate-pulse">
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                        <span className="text-sm font-medium">Cronômetro ativo...</span>
-                      </div>
-                    )}
                     <CardDescription className="mt-2">Chamado #{chamado.id.slice(-8)}</CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <Badge className={`${
                       chamado.status === 'Aberto' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
+                      chamado.status === 'Em Andamento' ? 'bg-yellow-100 text-yellow-800' :
+                      chamado.status === 'Pausado' ? 'bg-gray-100 text-gray-800' :
+                      chamado.status === 'Resolvido' ? 'bg-purple-100 text-purple-800' :
+                      chamado.status === 'Aprovado' ? 'bg-green-100 text-green-800' :
+                      'bg-red-100 text-red-800'
                     }`}>
                       {chamado.status}
                     </Badge>
                     <Badge className={`${
                       chamado.prioridade === 'Baixa' ? 'bg-gray-100 text-gray-800' :
+                      chamado.prioridade === 'Média' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-red-100 text-red-800'
                     }`}>
                       {chamado.prioridade}
@@ -291,43 +302,35 @@ export default function ChamadoDetails() {
                 <CardContent>
                   {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
                   
-                  {chamado.status === 'Aberto' && (
-                    <Button onClick={handleStartTimer} disabled={actionLoading} className="w-full">
-                      {actionLoading ? 'Iniciando...' : 'Assumir e Iniciar Trabalho'}
+                  {/* ✅ LÓGICA DE AÇÕES TOTALMENTE REFEITA */}
+                  {!isCurrentUserExecutor && chamado.status !== 'Resolvido' && (
+                    <Button onClick={handleJoinAndStartWork} disabled={actionLoading} className="w-full">
+                      {actionLoading ? 'A entrar...' : 'Juntar-se e Iniciar Trabalho'}
                     </Button>
                   )}
 
-                  {chamado.status === 'Em Andamento' && isCurrentUserExecutor && (
+                  {isCurrentUserExecutor && (
                     <div className="space-y-4">
-                       <div>
-                        <Label htmlFor="notasResolucao">Notas de Resolução (Obrigatório para resolver)</Label>
-                        <Textarea id="notasResolucao" value={actionData.notasResolucao} onChange={(e) => setActionData({...actionData, notasResolucao: e.target.value})} />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={handlePauseTimer} disabled={actionLoading} variant="outline" className="flex-1">Pausar</Button>
-                        <Button onClick={handleResolveChamado} disabled={actionLoading || !actionData.notasResolucao} className="flex-1">Marcar como Resolvido</Button>
-                      </div>
+                      {chamado.status !== 'Resolvido' && (
+                        <Button onClick={handleToggleMyTimer} disabled={actionLoading} className="w-full" variant={currentUserTimeStatus === 'tracking' ? 'secondary' : 'default'}>
+                          {actionLoading ? 'A processar...' : (currentUserTimeStatus === 'tracking' ? 'Pausar o Meu Trabalho' : 'Iniciar/Retomar o Meu Trabalho')}
+                        </Button>
+                      )}
+                      {(chamado.status === 'Em Andamento' || chamado.status === 'Pausado') && (
+                        <div className="pt-4 border-t">
+                          <Label htmlFor="notasResolucao">Notas de Resolução (Obrigatório para resolver)</Label>
+                          <Textarea id="notasResolucao" value={actionData.notasResolucao} onChange={(e) => setActionData({...actionData, notasResolucao: e.target.value})} />
+                          <Button onClick={handleResolveChamado} disabled={actionLoading || !actionData.notasResolucao} className="w-full mt-2">Marcar como Resolvido</Button>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {chamado.status === 'Pausado' && isCurrentUserExecutor && (
-                     <Button onClick={handleStartTimer} disabled={actionLoading} className="w-full">
-                       {actionLoading ? 'Retomando...' : 'Retomar Trabalho'}
-                     </Button>
-                  )}
-                  
                   {userProfile?.perfil === 'Gestor' && ['Aberto', 'Em Andamento', 'Pausado'].includes(chamado.status) && (
                     <div className="space-y-4 mt-4 pt-4 border-t">
-                      <Label>Gerenciar Responsáveis</Label>
-                      <MultiSelect
-                        options={assignableUsers.map(e => ({ value: e.id, label: `${e.nome} (${e.perfil})` }))}
-                        selected={selectedExecutors}
-                        onChange={setSelectedExecutors}
-                        className="w-full"
-                      />
-                      <Button onClick={handleUpdateExecutors} disabled={actionLoading} className="w-full">
-                        {actionLoading ? 'Atualizando...' : 'Salvar Responsáveis'}
-                      </Button>
+                      <Label>Gerir Responsáveis</Label>
+                      <MultiSelect options={assignableUsers.map(e => ({ value: e.id, label: `${e.nome} (${e.perfil})` }))} selected={selectedExecutors} onChange={setSelectedExecutors} className="w-full" />
+                      <Button onClick={handleUpdateExecutors} disabled={actionLoading} className="w-full">Salvar Responsáveis</Button>
                     </div>
                   )}
 
@@ -343,19 +346,10 @@ export default function ChamadoDetails() {
                   
                   {chamado.status === 'Aprovado' && userProfile?.perfil === 'Gestor' && !chamado.arquivado && (
                     <div className="mt-4 pt-4 border-t">
-                      <Button 
-                        variant="outline"
-                        onClick={handleArquivar}
-                        disabled={actionLoading}
-                        className="w-full"
-                      >
-                        {actionLoading ? (
-                           <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Arquivando...</>
-                        ) : 'Arquivar Chamado'}
+                      <Button variant="outline" onClick={handleArquivar} disabled={actionLoading} className="w-full">
+                        {actionLoading ? ( <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Arquivando...</> ) : 'Arquivar Chamado'}
                       </Button>
-                      <p className="text-xs text-gray-500 mt-2 text-center">
-                        Esta ação irá remover o chamado do dashboard principal.
-                      </p>
+                      <p className="text-xs text-gray-500 mt-2 text-center">Esta ação irá remover o chamado do dashboard principal.</p>
                     </div>
                   )}
                 </CardContent>
@@ -377,36 +371,44 @@ export default function ChamadoDetails() {
                     <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Criado em</p><p className="text-sm text-gray-600">{formatDate(chamado.criadoEm)}</p></div></div>
                     <div className="flex items-center gap-2"><UserIcon className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Solicitante</p><p className="text-sm text-gray-600">{solicitante?.nome || '...'}</p></div></div>
                     
-                    {/* ✅ Exibição de múltiplos responsáveis */}
+                    {/* ✅ Exibição de múltiplos responsáveis com status e tempo individual */}
                     {executoresData.length > 0 && (
                       <div className="flex items-start gap-2">
                         <Users className="h-4 w-4 text-gray-500 mt-1" />
                         <div>
                           <p className="text-sm font-medium">Responsáveis</p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {executoresData.map(exec => (
-                              <Badge key={exec.id} variant="secondary">{exec.nome}</Badge>
-                            ))}
+                          <div className="space-y-1 mt-1">
+                            {executoresData.map(exec => {
+                              const userTimeData = chamado.timeTracking?.[exec.id];
+                              const isTracking = userTimeData?.status === 'tracking';
+                              return (
+                                <div key={exec.id} className="flex items-center gap-2">
+                                  {isTracking && <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" title="A trabalhar"></div>}
+                                  <Badge variant="secondary">{exec.nome}</Badge>
+                                  <span className="text-xs text-gray-500 font-mono">
+                                    {formatTime(userTimeData?.totalSeconds)}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
                     )}
                     
-                    {chamado.assumidoEm && (
-                        <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Primeira Ação em</p><p className="text-sm text-gray-600">{formatDate(chamado.assumidoEm)}</p></div></div>
-                    )}
                     {chamado.resolvidoEm && (
                         <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Resolvido em</p><p className="text-sm text-gray-600">{formatDate(chamado.resolvidoEm)}</p></div></div>
                     )}
+                    {/* ✅ Exibição do tempo TOTAL do projeto */}
                     {chamado.tempoGasto > 0 && (
-                      <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Tempo Gasto</p><p className="text-sm text-gray-600 font-mono">{formatTime(chamado.tempoGasto)}</p></div></div>
+                      <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-500" /><div><p className="text-sm font-medium">Tempo Total Gasto no Projeto</p><p className="text-sm text-gray-600 font-mono">{formatTime(chamado.tempoGasto)}</p></div></div>
                     )}
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader><CardTitle className="text-lg">Histórico</CardTitle></CardHeader>
                 <CardContent>
-                    {/* ... (Conteúdo do Histórico) ... */}
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">{chamado.historico?.sort((a, b) => b.timestamp.toDate() - a.timestamp.toDate()).map((evento, index) => (<div key={index} className="border-l-2 border-gray-200 pl-4 pb-3"><p className="text-sm font-medium">{evento.acao}</p><p className="text-xs text-gray-500">{formatDate(evento.timestamp)}</p></div>))}</div>
                 </CardContent>
             </Card>
           </div>
