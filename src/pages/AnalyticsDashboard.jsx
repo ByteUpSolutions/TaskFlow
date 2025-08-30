@@ -79,10 +79,12 @@ export default function AnalyticsDashboard() {
     }, {})).map(([name, value]) => ({ name, value }));
 
     const userMetrics = allUsers.map(user => {
+       // ✅ LÓGICA ATUALIZADA: Verifica 'Resolvido' e 'Aprovado' para cada utilizador
       const resolvidos = filteredChamados.filter(c => 
-        c.status === 'Aprovado' && 
+        ['Resolvido', 'Aprovado'].includes(c.status) && 
         (c.executorIds?.includes(user.uid) || c.executorId === user.uid)
       );
+
 
       // ✅ 3. LÓGICA DE CÁLCULO SIMPLIFICADA AQUI TAMBÉM
       const totalTempoSegundosIndividual = resolvidos.reduce((acc, c) => {
