@@ -14,63 +14,71 @@ export default function Dashboard() {
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
 
+  // ✅ ESTADOS SEPARADOS PARA CADA TIPO DE BUSCA
+  const [myChamados, setMyChamados] = useState([]);
+  const [openChamados, setOpenChamados] = useState([]);
+  const [gestorChamados, setGestorChamados] = useState([]);
+
   useEffect(() => {
     if (!currentUser || !userProfile) return;
 
-    let unsubscribeMyChamados = () => {};
-    let unsubscribeOpenChamados = () => {};
-
-    // Função para juntar e remover duplicados
-    const mergeChamados = (map, newChamados) => {
-      newChamados.forEach(chamado => {
-        map.set(chamado.id, chamado);
-      });
-      return Array.from(map.values());
-    };
+    let unsubscribeMy = () => {};
+    let unsubscribeOpen = () => {};
+    let unsubscribeGestor = () => {};
 
     if (userProfile.perfil === 'Gestor') {
       // Gestor vê todos os chamados
-      unsubscribeMyChamados = subscribeToChamados({}, (chamadosData) => {
-        setChamados(chamadosData);
+      unsubscribeGestor = subscribeToChamados({}, (chamadosData) => {
+        setGestorChamados(chamadosData);
         setLoading(false);
       });
     } else if (userProfile.perfil === 'Executor') {
-      const chamadosMap = new Map();
-
+      setLoading(true);
       // Subscrição 1: Chamados onde eu sou responsável (e não estão abertos)
-      unsubscribeMyChamados = subscribeToChamados(
+      unsubscribeMy = subscribeToChamados(
         { 
           executorIdContains: currentUser.uid,
           status: ['Em Andamento', 'Pausado', 'Resolvido']
         }, 
-        (myChamados) => {
-          setChamados(prevChamados => {
-            const newMap = new Map(prevChamados.map(c => [c.id, c]));
-            return mergeChamados(newMap, myChamados);
-          });
-          setLoading(false);
+        (myChamadosData) => {
+          setMyChamados(myChamadosData);
         }
       );
 
       // Subscrição 2: Todos os chamados que estão "Abertos"
-      unsubscribeOpenChamados = subscribeToChamados(
+      unsubscribeOpen = subscribeToChamados(
         { status: ['Aberto'] },
-        (openChamados) => {
-          setChamados(prevChamados => {
-            const newMap = new Map(prevChamados.map(c => [c.id, c]));
-            return mergeChamados(newMap, openChamados);
-          });
-          setLoading(false);
+        (openChamadosData) => {
+          setOpenChamados(openChamadosData);
         }
       );
     }
 
     // Função de limpeza para cancelar as subscrições quando o componente for desmontado
     return () => {
-      unsubscribeMyChamados();
-      unsubscribeOpenChamados();
+      unsubscribeMy();
+      unsubscribeOpen();
+      unsubscribeGestor();
     };
   }, [currentUser, userProfile]);
+
+
+  // ✅ NOVO useEffect para juntar os chamados do Executor
+  useEffect(() => {
+    if (userProfile?.perfil === 'Gestor') {
+      setChamados(gestorChamados);
+    } else if (userProfile?.perfil === 'Executor') {
+      const combinedMap = new Map();
+      // Adiciona primeiro os chamados abertos
+      openChamados.forEach(c => combinedMap.set(c.id, c));
+      // Depois, adiciona os chamados do utilizador (sobrescrevendo se houver duplicados, o que é improvável mas seguro)
+      myChamados.forEach(c => combinedMap.set(c.id, c));
+      
+      setChamados(Array.from(combinedMap.values()));
+      setLoading(false);
+    }
+  }, [userProfile, gestorChamados, myChamados, openChamados]);
+
 
   const handleViewDetails = (chamado) => navigate(`/chamado/${chamado.id}`);
   const handleTakeAction = (chamado) => navigate(`/chamado/${chamado.id}?action=true`);
@@ -156,3 +164,4 @@ export default function Dashboard() {
     </>
   );
 }
+
