@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { subscribeToChamados } from '../services/firestore';
@@ -9,8 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Plus, Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
-  const [chamados, setChamados] = useState([]);
-  const [loading, setLoading] = useState(true);
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
 
@@ -18,6 +16,11 @@ export default function Dashboard() {
   const [myChamados, setMyChamados] = useState([]);
   const [openChamados, setOpenChamados] = useState([]);
   const [gestorChamados, setGestorChamados] = useState([]);
+  
+  // ✅ LÓGICA DE LOADING REFINADA
+  const [isLoadingMy, setIsLoadingMy] = useState(true);
+  const [isLoadingOpen, setIsLoadingOpen] = useState(true);
+  const [isLoadingGestor, setIsLoadingGestor] = useState(true);
 
   useEffect(() => {
     if (!currentUser || !userProfile) return;
@@ -27,13 +30,15 @@ export default function Dashboard() {
     let unsubscribeGestor = () => {};
 
     if (userProfile.perfil === 'Gestor') {
-      // Gestor vê todos os chamados
+      setIsLoadingMy(false);
+      setIsLoadingOpen(false);
       unsubscribeGestor = subscribeToChamados({}, (chamadosData) => {
         setGestorChamados(chamadosData);
-        setLoading(false);
+        setIsLoadingGestor(false);
       });
     } else if (userProfile.perfil === 'Executor') {
-      setLoading(true);
+      setIsLoadingGestor(false);
+      
       // Subscrição 1: Chamados onde eu sou responsável (e não estão abertos)
       unsubscribeMy = subscribeToChamados(
         { 
@@ -42,6 +47,7 @@ export default function Dashboard() {
         }, 
         (myChamadosData) => {
           setMyChamados(myChamadosData);
+          setIsLoadingMy(false);
         }
       );
 
@@ -50,6 +56,7 @@ export default function Dashboard() {
         { status: ['Aberto'] },
         (openChamadosData) => {
           setOpenChamados(openChamadosData);
+          setIsLoadingOpen(false);
         }
       );
     }
@@ -62,23 +69,23 @@ export default function Dashboard() {
     };
   }, [currentUser, userProfile]);
 
-
-  // ✅ NOVO useEffect para juntar os chamados do Executor
-  useEffect(() => {
+  // ✅ useMemo para juntar os chamados do Executor de forma eficiente
+  const chamados = useMemo(() => {
     if (userProfile?.perfil === 'Gestor') {
-      setChamados(gestorChamados);
-    } else if (userProfile?.perfil === 'Executor') {
+      return gestorChamados;
+    }
+    if (userProfile?.perfil === 'Executor') {
       const combinedMap = new Map();
       // Adiciona primeiro os chamados abertos
       openChamados.forEach(c => combinedMap.set(c.id, c));
-      // Depois, adiciona os chamados do utilizador (sobrescrevendo se houver duplicados, o que é improvável mas seguro)
+      // Depois, adiciona os chamados do utilizador (sobrescrevendo se houver duplicados)
       myChamados.forEach(c => combinedMap.set(c.id, c));
-      
-      setChamados(Array.from(combinedMap.values()));
-      setLoading(false);
+      return Array.from(combinedMap.values());
     }
+    return [];
   }, [userProfile, gestorChamados, myChamados, openChamados]);
 
+  const loading = userProfile?.perfil === 'Gestor' ? isLoadingGestor : (isLoadingMy || isLoadingOpen);
 
   const handleViewDetails = (chamado) => navigate(`/chamado/${chamado.id}`);
   const handleTakeAction = (chamado) => navigate(`/chamado/${chamado.id}?action=true`);
