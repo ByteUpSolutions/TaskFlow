@@ -78,8 +78,19 @@ export const subscribeToChamados = (filters, callback) => {
   try {
     let q = collection(db, "chamados");
 
+    // Filtro base: nunca mostrar chamados arquivados
     q = query(q, where("arquivado", "==", false));
 
+    // Filtro por múltiplos status (ex: ['Aberto', 'Em Andamento'])
+    if (
+      filters.status &&
+      Array.isArray(filters.status) &&
+      filters.status.length > 0
+    ) {
+      q = query(q, where("status", "in", filters.status));
+    }
+
+    // Filtro para encontrar chamados onde o utilizador é um dos responsáveis
     if (filters.executorIdContains) {
       q = query(
         q,
@@ -89,18 +100,26 @@ export const subscribeToChamados = (filters, callback) => {
 
     q = query(q, orderBy("criadoEm", "desc"));
 
-    return onSnapshot(q, (querySnapshot) => {
-      const chamados = [];
-      querySnapshot.forEach((doc) => {
-        chamados.push({ id: doc.id, ...doc.data() });
-      });
-      callback(chamados);
-    });
+    return onSnapshot(
+      q,
+      (querySnapshot) => {
+        const chamados = [];
+        querySnapshot.forEach((doc) => {
+          chamados.push({ id: doc.id, ...doc.data() });
+        });
+        callback(chamados);
+      },
+      (error) => {
+        console.error("Erro na subscrição de chamados:", error);
+        // Lembre-se de criar o índice no Firebase se o console pedir!
+      }
+    );
   } catch (error) {
-    console.error("Error subscribing to chamados:", error);
+    console.error("Erro ao configurar subscrição de chamados:", error);
     throw error;
   }
 };
+
 
 export const subscribeToArquivados = (callback) => {
   try {

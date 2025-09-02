@@ -17,20 +17,59 @@ export default function Dashboard() {
   useEffect(() => {
     if (!currentUser || !userProfile) return;
 
-    // ✅ LÓGICA DE FILTRO ATUALIZADA
-    const filters = {};
-    // Se o usuário é um Executor, ele só verá os chamados aos quais está atribuído.
-    // Gestores continuarão a ver todos os chamados, pois nenhum filtro é aplicado para eles.
-    if (userProfile.perfil === 'Executor') {
-      filters.executorIdContains = currentUser.uid;
+    let unsubscribeMyChamados = () => {};
+    let unsubscribeOpenChamados = () => {};
+
+    // Função para juntar e remover duplicados
+    const mergeChamados = (map, newChamados) => {
+      newChamados.forEach(chamado => {
+        map.set(chamado.id, chamado);
+      });
+      return Array.from(map.values());
+    };
+
+    if (userProfile.perfil === 'Gestor') {
+      // Gestor vê todos os chamados
+      unsubscribeMyChamados = subscribeToChamados({}, (chamadosData) => {
+        setChamados(chamadosData);
+        setLoading(false);
+      });
+    } else if (userProfile.perfil === 'Executor') {
+      const chamadosMap = new Map();
+
+      // Subscrição 1: Chamados onde eu sou responsável (e não estão abertos)
+      unsubscribeMyChamados = subscribeToChamados(
+        { 
+          executorIdContains: currentUser.uid,
+          status: ['Em Andamento', 'Pausado', 'Resolvido']
+        }, 
+        (myChamados) => {
+          setChamados(prevChamados => {
+            const newMap = new Map(prevChamados.map(c => [c.id, c]));
+            return mergeChamados(newMap, myChamados);
+          });
+          setLoading(false);
+        }
+      );
+
+      // Subscrição 2: Todos os chamados que estão "Abertos"
+      unsubscribeOpenChamados = subscribeToChamados(
+        { status: ['Aberto'] },
+        (openChamados) => {
+          setChamados(prevChamados => {
+            const newMap = new Map(prevChamados.map(c => [c.id, c]));
+            return mergeChamados(newMap, openChamados);
+          });
+          setLoading(false);
+        }
+      );
     }
 
-    const unsubscribe = subscribeToChamados(filters, (chamadosData) => {
-      setChamados(chamadosData);
-      setLoading(false);
-    });
-    
-    return () => unsubscribe();
+    // Função de limpeza para cancelar as subscrições quando o componente for desmontado
+    return () => {
+      unsubscribeMyChamados();
+      unsubscribeOpenChamados();
+    };
   }, [currentUser, userProfile]);
 
   const handleViewDetails = (chamado) => navigate(`/chamado/${chamado.id}`);
@@ -39,7 +78,7 @@ export default function Dashboard() {
 
   const getChamadosByStatus = (status) => chamados.filter(c => c.status === status);
 
-  if (loading) {
+  if (loading && chamados.length === 0) { // Mostra o loading apenas na carga inicial
     return (
         <div className="flex items-center justify-center py-12">
             <Loader2 className="h-16 w-16 animate-spin text-blue-600" />
@@ -62,9 +101,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-        <Card><CardHeader className="pb-2"><CardDescription>Total</CardDescription><CardTitle className="text-2xl">{chamados.length}</CardTitle></CardHeader></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Total Visível</CardDescription><CardTitle className="text-2xl">{chamados.length}</CardTitle></CardHeader></Card>
         <Card><CardHeader className="pb-2"><CardDescription>Abertos</CardDescription><CardTitle className="text-2xl text-blue-600">{getChamadosByStatus('Aberto').length}</CardTitle></CardHeader></Card>
         <Card><CardHeader className="pb-2"><CardDescription>Em Progresso</CardDescription><CardTitle className="text-2xl text-yellow-600">{getChamadosByStatus('Em Andamento').length + getChamadosByStatus('Pausado').length}</CardTitle></CardHeader></Card>
         <Card><CardHeader className="pb-2"><CardDescription>Finalizados</CardDescription><CardTitle className="text-2xl text-green-600">{getChamadosByStatus('Aprovado').length}</CardTitle></CardHeader></Card>
@@ -84,13 +122,15 @@ export default function Dashboard() {
                   {status} ({getChamadosByStatus(status).length})
                 </h3>
                 <div className="space-y-3 min-h-[100px]">
-                  {getChamadosByStatus(status).map((chamado) => (
-                    <ChamadoCard
-                      key={chamado.id}
-                      chamado={chamado}
-                      onViewDetails={handleViewDetails}
-                      onTakeAction={handleTakeAction}
-                    />
+                  {getChamadosByStatus(status)
+                    .sort((a,b) => b.criadoEm.toDate() - a.criadoEm.toDate()) // Ordena por data
+                    .map((chamado) => (
+                      <ChamadoCard
+                        key={chamado.id}
+                        chamado={chamado}
+                        onViewDetails={handleViewDetails}
+                        onTakeAction={handleTakeAction}
+                      />
                   ))}
                 </div>
               </div>
@@ -100,7 +140,9 @@ export default function Dashboard() {
         
         <TabsContent value="list">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {chamados.map((chamado) => (
+            {chamados
+              .sort((a,b) => b.criadoEm.toDate() - a.criadoEm.toDate()) // Ordena por data
+              .map((chamado) => (
               <ChamadoCard
                 key={chamado.id}
                 chamado={chamado}
