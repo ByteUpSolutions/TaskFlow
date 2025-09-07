@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, serverTimestamp, arrayUnion } from 'firebase/firestore'; // Importar serverTimestamp e arrayUnion
+import { doc, onSnapshot, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   updateChamado, 
   getUsuario,
   getAssignableUsers,
   addComentario,
-  stopUserTimer, // Alterado para a função de tempo individual
-  startUserTimer
+  startUserTimer, // Importar a função de tempo individual
+  stopUserTimer   // Importar a função de tempo individual
 } from '../services/firestore';
 import { db } from '../lib/firebase';
 
@@ -85,7 +85,7 @@ export default function ChamadoDetails() {
     if (totalSeconds === null || totalSeconds === undefined) return '00:00:00';
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+    const seconds = Math.floor(totalSeconds % 60);
     return [hours, minutes, seconds].map(v => v < 10 ? "0" + v : v).join(":");
   };
   
@@ -97,8 +97,12 @@ export default function ChamadoDetails() {
 
   const handleJoinAndStartWork = async () => {
     setActionLoading(true);
-    // Adiciona o utilizador à lista de responsáveis
-    await updateChamado(id, { executorIds: arrayUnion(currentUser.uid) }, currentUser.uid, `${userProfile.nome} juntou-se ao chamado.`);
+    // Adiciona o utilizador à lista de responsáveis e muda o status
+    const updates = { 
+        executorIds: arrayUnion(currentUser.uid),
+        status: 'Em Andamento' 
+    };
+    await updateChamado(id, updates, currentUser.uid, `${userProfile.nome} juntou-se ao chamado.`);
     // Inicia o seu cronómetro individual
     await startUserTimer(id, currentUser.uid);
     setActionLoading(false);
@@ -108,10 +112,10 @@ export default function ChamadoDetails() {
     setActionLoading(true);
     if (currentUserTimeStatus === 'tracking') {
       await stopUserTimer(id, currentUser.uid);
-      await updateChamado(id, {}, currentUser.uid, `${userProfile.nome} pausou o trabalho.`);
+      await updateChamado(id, { status: 'Pausado' }, currentUser.uid, `${userProfile.nome} pausou o trabalho.`);
     } else {
       await startUserTimer(id, currentUser.uid);
-      await updateChamado(id, {}, currentUser.uid, `${userProfile.nome} retomou o trabalho.`);
+      await updateChamado(id, { status: 'Em Andamento' }, currentUser.uid, `${userProfile.nome} retomou o trabalho.`);
     }
     setActionLoading(false);
   };
@@ -242,6 +246,12 @@ export default function ChamadoDetails() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-2xl">{chamado.titulo}</CardTitle>
+                    {Object.values(chamado.timeTracking || {}).some(t => t.status === 'tracking') && (
+                      <div className="flex items-center gap-2 text-green-600 mt-2 animate-pulse">
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                        <span className="text-sm font-medium">Trabalho em progresso...</span>
+                      </div>
+                    )}
                     <CardDescription className="mt-2">Chamado #{chamado.id.slice(-8)}</CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -303,12 +313,15 @@ export default function ChamadoDetails() {
                   {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{error}</AlertDescription></Alert>}
                   
                   {/* ✅ LÓGICA DE AÇÕES TOTALMENTE REFEITA */}
+
+                  {/* Ação 1: Juntar-se ao chamado (se ainda não for responsável) */}
                   {!isCurrentUserExecutor && chamado.status !== 'Resolvido' && (
                     <Button onClick={handleJoinAndStartWork} disabled={actionLoading} className="w-full">
                       {actionLoading ? 'A entrar...' : 'Juntar-se e Iniciar Trabalho'}
                     </Button>
                   )}
 
+                  {/* Ação 2: Controlo do cronómetro e resolução (se já for responsável) */}
                   {isCurrentUserExecutor && (
                     <div className="space-y-4">
                       {chamado.status !== 'Resolvido' && (
@@ -325,7 +338,7 @@ export default function ChamadoDetails() {
                       )}
                     </div>
                   )}
-
+                  
                   {userProfile?.perfil === 'Gestor' && ['Aberto', 'Em Andamento', 'Pausado'].includes(chamado.status) && (
                     <div className="space-y-4 mt-4 pt-4 border-t">
                       <Label>Gerir Responsáveis</Label>
@@ -346,10 +359,19 @@ export default function ChamadoDetails() {
                   
                   {chamado.status === 'Aprovado' && userProfile?.perfil === 'Gestor' && !chamado.arquivado && (
                     <div className="mt-4 pt-4 border-t">
-                      <Button variant="outline" onClick={handleArquivar} disabled={actionLoading} className="w-full">
-                        {actionLoading ? ( <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Arquivando...</> ) : 'Arquivar Chamado'}
+                      <Button 
+                        variant="outline"
+                        onClick={handleArquivar}
+                        disabled={actionLoading}
+                        className="w-full"
+                      >
+                        {actionLoading ? (
+                           <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Arquivando...</>
+                        ) : 'Arquivar Chamado'}
                       </Button>
-                      <p className="text-xs text-gray-500 mt-2 text-center">Esta ação irá remover o chamado do dashboard principal.</p>
+                      <p className="text-xs text-gray-500 mt-2 text-center">
+                        Esta ação irá remover o chamado do dashboard principal.
+                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -417,3 +439,4 @@ export default function ChamadoDetails() {
     </div>
   );
 }
+
