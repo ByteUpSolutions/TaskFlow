@@ -1,4 +1,36 @@
-# Ignorar arquivos de ambiente local
+# Dependências
+# Esta linha ignora a pasta de dependências do seu projeto React.
+# A pasta de dependências das Cloud Functions já é ignorada pelo .gitignore que está DENTRO da pasta /functions.
+/node_modules
+
+# Ficheiros de Build e Cache
+# Pasta onde o seu site React é compilado para produção.
+/dist
+# Cache do Vite
+/.vite
+
+# Ficheiros de Ambiente e Segredos
+# NUNCA envie ficheiros .env para o GitHub!
 .env
 .env.local
 .env.*.local
+
+# Ficheiros de Log e Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log*
+*-debug.log*
+
+# Ficheiros do Firebase (gerados localmente)
+# Ignora as configurações locais do emulador e da sua conta.
+.firebase
+.firebaserc
+
+# Ficheiros de Configuração de Editores de Código
+.vscode/
+.idea/
+
+# Ficheiros de Sistema Operacional
+.DS_Store
+Thumbs.db
