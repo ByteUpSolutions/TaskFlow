@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from './ui/button';
-import { LogOut, User, UserCheck, Archive, LineChart } from 'lucide-react';
+import { LogOut, User, UserCheck, Archive, LineChart, CalendarCheck } from 'lucide-react';
 import { getUsuariosPendentes } from '../services/firestore';
 import { useQuery } from '@tanstack/react-query';
 
@@ -35,6 +35,14 @@ export default function Layout({ children }) {
             <Link to="/dashboard" className="text-xl font-semibold text-gray-900">TaskFlow</Link>
             <div className="flex items-center space-x-2"> {/* Reduzido o space-x para caber mais itens */}
               
+              {/* ✅ Link para a nova página de Agenda */}
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/agenda">
+                  <CalendarCheck className="h-4 w-4 mr-2" />
+                  Agenda
+                </Link>
+              </Button>
+
               {/* ✅ Link para o Dashboard Analítico (só para Gestores) */}
               {userProfile?.perfil === 'Gestor' && (
                 <Button variant="ghost" size="sm" asChild>

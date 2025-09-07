@@ -12,8 +12,11 @@ import {
   getDoc,
   arrayUnion,
   deleteField,
+  Timestamp,
+  deleteDoc
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { startOfMonth, endOfMonth } from "date-fns";
 
 // --- Funções de Chamado ---
 
@@ -302,4 +305,65 @@ export const getAllUsers = async () => {
     console.error("Erro ao buscar todos os usuários:", error);
     throw error;
   }
+};
+
+// ✅ --- NOVAS FUNÇÕES PARA A AGENDA ---
+
+// Cria uma nova tarefa na agenda (agora com criador)
+export const addAgendaTarefa = async (tarefaData) => {
+  try {
+    await addDoc(collection(db, 'agendaTarefas'), {
+      ...tarefaData, // Deve incluir criadorId e criadorNome
+      concluida: false,
+      tempoGastoSegundos: 0,
+      criadoEm: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Erro ao adicionar tarefa na agenda:", error);
+    throw error;
+  }
+};
+
+// Busca as tarefas de um MÊS específico (agora sem filtrar por utilizador)
+export const subscribeToMonthAgendaTarefas = (monthDate, callback) => {
+  const start = startOfMonth(monthDate);
+  const end = endOfMonth(monthDate);
+
+  const q = query(
+    collection(db, 'agendaTarefas'),
+    where('data', '>=', Timestamp.fromDate(start)),
+    where('data', '<=', Timestamp.fromDate(end)),
+  );
+
+  return onSnapshot(q, (querySnapshot) => {
+    const tarefas = [];
+    querySnapshot.forEach(doc => {
+      tarefas.push({ id: doc.id, ...doc.data() });
+    });
+    callback(tarefas);
+  }, (error) => {
+    console.error("Erro ao subscrever às tarefas do mês:", error);
+  });
+};
+
+// Atualiza uma tarefa (ex: marcar como concluída, atualizar tempo)
+export const updateAgendaTarefa = async (tarefaId, updates) => {
+    try {
+        const tarefaRef = doc(db, 'agendaTarefas', tarefaId);
+        await updateDoc(tarefaRef, updates);
+    } catch (error) {
+        console.error("Erro ao atualizar tarefa da agenda:", error);
+        throw error;
+    }
+};
+
+// Apaga uma tarefa da agenda
+export const deleteAgendaTarefa = async (tarefaId) => {
+    try {
+        const tarefaRef = doc(db, 'agendaTarefas', tarefaId);
+        await deleteDoc(tarefaRef);
+    } catch (error) {
+        console.error("Erro ao apagar tarefa da agenda:", error);
+        throw error;
+    }
 };
