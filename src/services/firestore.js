@@ -13,7 +13,7 @@ import {
   arrayUnion,
   deleteField,
   Timestamp,
-  deleteDoc
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { startOfMonth, endOfMonth } from "date-fns";
@@ -46,7 +46,6 @@ export const createChamado = async (chamadoData) => {
   }
 };
 
-// ✅ FUNÇÃO ATUALIZADA: Simplificada para focar em status e histórico
 export const updateChamado = async (chamadoId, updates, userId, acao) => {
   try {
     const chamadoRef = doc(db, "chamados", chamadoId);
@@ -62,7 +61,6 @@ export const updateChamado = async (chamadoId, updates, userId, acao) => {
       historico: arrayUnion(newHistoryEntry), // Usa arrayUnion para mais segurança
     };
 
-    // Apenas adiciona o timestamp de resolução se o status estiver sendo mudado para 'Resolvido'
     if (updates.status === "Resolvido") {
       const chamadoDoc = await getDoc(chamadoRef);
       if (chamadoDoc.exists() && chamadoDoc.data().status !== "Resolvido") {
@@ -81,10 +79,8 @@ export const subscribeToChamados = (filters, callback) => {
   try {
     let q = collection(db, "chamados");
 
-    // Filtro base: nunca mostrar chamados arquivados
     q = query(q, where("arquivado", "==", false));
 
-    // Filtro por múltiplos status (ex: ['Aberto', 'Em Andamento'])
     if (
       filters.status &&
       Array.isArray(filters.status) &&
@@ -93,7 +89,6 @@ export const subscribeToChamados = (filters, callback) => {
       q = query(q, where("status", "in", filters.status));
     }
 
-    // Filtro para encontrar chamados onde o utilizador é um dos responsáveis
     if (filters.executorIdContains) {
       q = query(
         q,
@@ -114,7 +109,6 @@ export const subscribeToChamados = (filters, callback) => {
       },
       (error) => {
         console.error("Erro na subscrição de chamados:", error);
-        // Lembre-se de criar o índice no Firebase se o console pedir!
       }
     );
   } catch (error) {
@@ -122,7 +116,6 @@ export const subscribeToChamados = (filters, callback) => {
     throw error;
   }
 };
-
 
 export const subscribeToArquivados = (callback) => {
   try {
@@ -175,12 +168,21 @@ export const stopUserTimer = async (chamadoId, userId) => {
   const userTimeData = chamadoData.timeTracking?.[userId];
 
   if (!userTimeData || !userTimeData.lastStart) {
+    console.warn("Tentativa de parar o cronómetro sem um tempo de início.");
     return;
   }
 
   const startTime = userTimeData.lastStart.toDate();
   const endTime = new Date();
-  const durationInSeconds = Math.round((endTime - startTime) / 1000);
+
+  // ✅ CORREÇÃO: Lógica para impedir tempo negativo
+  let durationInSeconds = Math.round(
+    (endTime.getTime() - startTime.getTime()) / 1000
+  );
+  if (durationInSeconds < 0) {
+    console.warn("Duração negativa detetada, a definir duração para 0.");
+    durationInSeconds = 0;
+  }
 
   const currentTotalSeconds = userTimeData.totalSeconds || 0;
   const newTotalSeconds = currentTotalSeconds + durationInSeconds;
@@ -201,6 +203,7 @@ export const stopUserTimer = async (chamadoId, userId) => {
 };
 
 // --- Funções de Usuário ---
+// ... (O resto do seu ficheiro, a partir daqui, permanece igual)
 
 export const getUsuario = async (userId) => {
   try {
@@ -307,16 +310,15 @@ export const getAllUsers = async () => {
   }
 };
 
-// ✅ --- NOVAS FUNÇÕES PARA A AGENDA ---
+// --- Funções para a Agenda ---
 
-// Cria uma nova tarefa na agenda (agora com criador)
 export const addAgendaTarefa = async (tarefaData) => {
   try {
-    await addDoc(collection(db, 'agendaTarefas'), {
-      ...tarefaData, // Deve incluir criadorId e criadorNome
+    await addDoc(collection(db, "agendaTarefas"), {
+      ...tarefaData,
       concluida: false,
       tempoGastoSegundos: 0,
-      criadoEm: serverTimestamp()
+      criadoEm: serverTimestamp(),
     });
   } catch (error) {
     console.error("Erro ao adicionar tarefa na agenda:", error);
@@ -324,46 +326,47 @@ export const addAgendaTarefa = async (tarefaData) => {
   }
 };
 
-// Busca as tarefas de um MÊS específico (agora sem filtrar por utilizador)
 export const subscribeToMonthAgendaTarefas = (monthDate, callback) => {
   const start = startOfMonth(monthDate);
   const end = endOfMonth(monthDate);
 
   const q = query(
-    collection(db, 'agendaTarefas'),
-    where('data', '>=', Timestamp.fromDate(start)),
-    where('data', '<=', Timestamp.fromDate(end)),
+    collection(db, "agendaTarefas"),
+    where("data", ">=", Timestamp.fromDate(start)),
+    where("data", "<=", Timestamp.fromDate(end))
   );
 
-  return onSnapshot(q, (querySnapshot) => {
-    const tarefas = [];
-    querySnapshot.forEach(doc => {
-      tarefas.push({ id: doc.id, ...doc.data() });
-    });
-    callback(tarefas);
-  }, (error) => {
-    console.error("Erro ao subscrever às tarefas do mês:", error);
-  });
+  return onSnapshot(
+    q,
+    (querySnapshot) => {
+      const tarefas = [];
+      querySnapshot.forEach((doc) => {
+        tarefas.push({ id: doc.id, ...doc.data() });
+      });
+      callback(tarefas);
+    },
+    (error) => {
+      console.error("Erro ao subscrever às tarefas do mês:", error);
+    }
+  );
 };
 
-// Atualiza uma tarefa (ex: marcar como concluída, atualizar tempo)
 export const updateAgendaTarefa = async (tarefaId, updates) => {
-    try {
-        const tarefaRef = doc(db, 'agendaTarefas', tarefaId);
-        await updateDoc(tarefaRef, updates);
-    } catch (error) {
-        console.error("Erro ao atualizar tarefa da agenda:", error);
-        throw error;
-    }
+  try {
+    const tarefaRef = doc(db, "agendaTarefas", tarefaId);
+    await updateDoc(tarefaRef, updates);
+  } catch (error) {
+    console.error("Erro ao atualizar tarefa da agenda:", error);
+    throw error;
+  }
 };
 
-// Apaga uma tarefa da agenda
 export const deleteAgendaTarefa = async (tarefaId) => {
-    try {
-        const tarefaRef = doc(db, 'agendaTarefas', tarefaId);
-        await deleteDoc(tarefaRef);
-    } catch (error) {
-        console.error("Erro ao apagar tarefa da agenda:", error);
-        throw error;
-    }
+  try {
+    const tarefaRef = doc(db, "agendaTarefas", tarefaId);
+    await deleteDoc(tarefaRef);
+  } catch (error) {
+    console.error("Erro ao apagar tarefa da agenda:", error);
+    throw error;
+  }
 };
